@@ -20,6 +20,7 @@ package main
 import (
 	"log"
 
+	certmanager "github.com/cw-sakamoto/kibertas/cmd/cert-manager"
 	clusterautoscaler "github.com/cw-sakamoto/kibertas/cmd/cluster-autoscaler"
 	"github.com/cw-sakamoto/kibertas/cmd/fluent"
 	"github.com/cw-sakamoto/kibertas/cmd/ingress"
@@ -34,6 +35,8 @@ import (
 )
 
 func main() {
+	var debug bool
+	var logLevel string
 	var rootCmd = &cobra.Command{Use: "kibertas"}
 
 	var cmdTest = &cobra.Command{
@@ -49,8 +52,8 @@ func main() {
 		Use:   "cluster-autoscaler",
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
-		Run: func(cmd *cobra.Command, args []string) {
-			clusterautoscaler.NewClusterAutoscaler().Check()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return clusterautoscaler.NewClusterAutoscaler().Check()
 		},
 	}
 
@@ -58,8 +61,8 @@ func main() {
 		Use:   "ingress",
 		Short: "test ingress(aws-load-balancer-controller, external-dns)",
 		Long:  "test ingress(aws-load-balancer-controller, external-dns))",
-		Run: func(cmd *cobra.Command, args []string) {
-			ingress.NewIngress().Check()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ingress.NewIngress().Check()
 		},
 	}
 
@@ -67,15 +70,56 @@ func main() {
 		Use:   "fluent",
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
-		Run: func(cmd *cobra.Command, args []string) {
-			fluent.NewFluent().Check()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fluent.NewFluent().Check()
+		},
+	}
+
+	var cmdCertManager = &cobra.Command{
+		Use:   "cert-manager",
+		Short: "test cert-manager",
+		Long:  "test cert-manager",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return certmanager.NewCertManager(debug, logLevel).Check()
+		},
+	}
+
+	var cmdAll = &cobra.Command{
+		Use:   "all",
+		Short: "test all application",
+		Long:  "test all application",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := ingress.NewIngress().Check()
+			if err != nil {
+				return err
+			}
+			err = fluent.NewFluent().Check()
+			if err != nil {
+				return err
+			}
+
+			err = clusterautoscaler.NewClusterAutoscaler().Check()
+			if err != nil {
+				return err
+			}
+
+			err = certmanager.NewCertManager(debug, logLevel).Check()
+			if err != nil {
+				return err
+			}
+			return nil
 		},
 	}
 
 	rootCmd.AddCommand(cmdTest)
+	cmdTest.AddCommand(cmdAll)
 	cmdTest.AddCommand(cmdFluent)
 	cmdTest.AddCommand(cmdClusterAutoscaler)
 	cmdTest.AddCommand(cmdIngress)
+	cmdTest.AddCommand(cmdCertManager)
+
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal("error: ", err)

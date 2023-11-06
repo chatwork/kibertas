@@ -52,7 +52,7 @@ func CreateDeployment(deployment *appsv1.Deployment, namespace string, clientset
 	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 
 	// Create Deployment
-	log.Println("Creating deployment: ", deployment.Name)
+	log.Println("Creating deployment:", deployment.Name)
 	result, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
@@ -80,6 +80,7 @@ func CreateDeployment(deployment *appsv1.Deployment, namespace string, clientset
 	log.Println("All pods are ready")
 	return nil
 }
+
 func DeleteDeployment(deploymentName string, namespace string, clientset *kubernetes.Clientset) error {
 	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 	deletePolicy := metav1.DeletePropagationForeground

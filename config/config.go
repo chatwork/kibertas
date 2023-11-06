@@ -2,16 +2,12 @@ package config
 
 import (
 	"context"
-	"flag"
 	"log"
-	"path/filepath"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// Uncomment to load all auth plugins
 	// _ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -31,27 +27,7 @@ func NewAwsConfig() aws.Config {
 }
 
 func NewK8sClientset() *kubernetes.Clientset {
-	var config *rest.Config
-	var err error
-	config, err = rest.InClusterConfig()
-
-	if err != nil {
-		var kubeconfig *string
-		if home := homedir.HomeDir(); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		}
-		flag.Parse()
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
-		if err != nil {
-			panic(err)
-		}
-	}
-	if err != nil {
-		panic(err)
-	}
-
+	config := ctrl.GetConfigOrDie()
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatal("error kubernetes NewForConfig: ", err)
@@ -60,31 +36,12 @@ func NewK8sClientset() *kubernetes.Clientset {
 	return clientset
 }
 
-func NewK8sClient() client.Client {
-	var config *rest.Config
-	var err error
-	config, err = rest.InClusterConfig()
+func NewK8sClient(options client.Options) client.Client {
+	config := ctrl.GetConfigOrDie()
+	c, err := client.New(config, options)
 
 	if err != nil {
-		var kubeconfig *string
-		if home := homedir.HomeDir(); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		}
-		flag.Parse()
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
-		if err != nil {
-			panic(err)
-		}
-	}
-	if err != nil {
-		panic(err)
-	}
-	c, err := client.New(config, client.Options{})
-
-	if err != nil {
-		log.Fatal("error kubernetes NewForConfig: ", err)
+		log.Fatal("error kubernetes client: ", err)
 		panic(err)
 	}
 	return c
