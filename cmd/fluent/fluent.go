@@ -57,8 +57,8 @@ func NewFluent() *Fluent {
 		namespace:      namespace,
 		deploymentName: deploymentName,
 		logBucketName:  logBucketName,
-		clientset:      config.InitK8sConfig(),
-		awscfg:         config.InitAwsConfig(),
+		clientset:      config.NewK8sClientset(),
+		awscfg:         config.NewAwsConfig(),
 	}
 }
 

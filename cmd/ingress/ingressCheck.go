@@ -55,7 +55,7 @@ func NewIngress() *Ingress {
 		namespace:        namespace,
 		resourceName:     resourceName,
 		externalHostname: externalHostName,
-		clientset:        config.InitK8sConfig(),
+		clientset:        config.NewK8sClientset(),
 	}
 }
 

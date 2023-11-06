@@ -45,7 +45,7 @@ func NewClusterAutoscaler() *ClusterAutoscaler {
 	return &ClusterAutoscaler{
 		namespace:      namespace,
 		deploymentName: deploymentName,
-		clientset:      config.InitK8sConfig(),
+		clientset:      config.NewK8sClientset(),
 	}
 }
 
