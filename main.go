@@ -24,6 +24,7 @@ import (
 	clusterautoscaler "github.com/cw-sakamoto/kibertas/cmd/cluster-autoscaler"
 	"github.com/cw-sakamoto/kibertas/cmd/fluent"
 	"github.com/cw-sakamoto/kibertas/cmd/ingress"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	// Uncomment to load all auth plugins
 	// _ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -37,7 +38,10 @@ import (
 func main() {
 	var debug bool
 	var logLevel string
+	var logr *logrus.Logger
 	var rootCmd = &cobra.Command{Use: "kibertas"}
+
+	log.Println("top log level: ", logLevel)
 
 	var cmdTest = &cobra.Command{
 		Use:   "test",
@@ -80,7 +84,7 @@ func main() {
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return certmanager.NewCertManager(debug, logLevel).Check()
+			return certmanager.NewCertManager(debug, logr).Check()
 		},
 	}
 
@@ -103,7 +107,7 @@ func main() {
 				return err
 			}
 
-			err = certmanager.NewCertManager(debug, logLevel).Check()
+			err = certmanager.NewCertManager(debug, logr).Check()
 			if err != nil {
 				return err
 			}
@@ -120,6 +124,18 @@ func main() {
 
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
+
+	log.Println("before Execute log level: ", logLevel)
+
+	logr = logrus.New()
+	logr.SetFormatter(&logrus.TextFormatter{})
+	level, err := logrus.ParseLevel(logLevel)
+
+	if err != nil {
+		log.Fatal("invalid log level: ", err)
+	}
+
+	logr.SetLevel(level)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal("error: ", err)
