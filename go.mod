@@ -1,6 +1,6 @@
 module github.com/cw-sakamoto/kibertas
 
-go 1.21.3
+go 1.21
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.22.1
