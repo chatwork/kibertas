@@ -3,43 +3,35 @@ package ingress
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
+	"github.com/cw-sakamoto/kibertas/cmd"
 	"github.com/cw-sakamoto/kibertas/config"
 	"github.com/cw-sakamoto/kibertas/util"
 	"github.com/cw-sakamoto/kibertas/util/k8s"
 
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
-	// Uncomment to load all auth plugins
-	// _ "k8s.io/client-go/plugin/pkg/client/auth"
-	//
-	// Or uncomment to load specific auth plugins
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/azure"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 type Ingress struct {
-	namespace        string
-	externalHostname string
-	resourceName     string
-	clientset        *kubernetes.Clientset
+	*cmd.Checker
+	ResourceName     string
+	ExternalHostname string
 }
 
-func NewIngress() *Ingress {
+func NewIngress(debug bool, logger func() *logrus.Entry) *Ingress {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	log.Printf("ingress check application namespace: %s\n", namespace)
+	logger().Infof("ingress check application namespace: %s", namespace)
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
@@ -52,40 +44,38 @@ func NewIngress() *Ingress {
 	}
 
 	return &Ingress{
-		namespace:        namespace,
-		resourceName:     resourceName,
-		externalHostname: externalHostName,
-		clientset:        config.NewK8sClientset(),
+		Checker:          cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger),
+		ResourceName:     resourceName,
+		ExternalHostname: externalHostName,
 	}
 }
 
 func (i *Ingress) Check() error {
-	k8s.CreateNamespace(i.namespace, i.clientset)
-	defer k8s.DeleteNamespace(i.namespace, i.clientset)
+	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
 
-	err := k8s.CreateDeployment(createDeploymentObject(i.resourceName), i.namespace, i.clientset)
-	if err != nil {
-		return err
-	}
-	defer k8s.DeleteDeployment(i.resourceName, i.namespace, i.clientset)
-	if err != nil {
-		return err
-	}
+	k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: i.Namespace,
+		}})
+	defer k.DeleteNamespace()
 
-	err = k8s.CreateService(createServiceObject(i.resourceName), i.namespace, i.clientset)
+	err := k.CreateDeployment(createDeploymentObject(i.ResourceName))
 	if err != nil {
 		return err
 	}
-	defer k8s.DeleteService(i.resourceName, i.namespace, i.clientset)
-	if err != nil {
-		return err
-	}
+	defer k.DeleteDeployment(i.ResourceName)
 
-	err = k8s.CreateIngress(createIngressObject(i.resourceName, i.externalHostname), i.namespace, i.clientset)
+	err = k.CreateService(createServiceObject(i.ResourceName))
 	if err != nil {
 		return err
 	}
-	defer k8s.DeleteIngress(i.resourceName, i.namespace, i.clientset)
+	defer k.DeleteService(i.ResourceName)
+
+	err = k.CreateIngress(createIngressObject(i.ResourceName, i.ExternalHostname))
+	if err != nil {
+		return err
+	}
+	defer k.DeleteIngress(i.ResourceName)
 
 	err = i.checkDNSRecord()
 	if err != nil {
@@ -211,32 +201,34 @@ func (i *Ingress) checkDNSRecord() error {
 	c := new(dns.Client)
 	m := new(dns.Msg)
 
-	log.Println("Check DNS Record for: ", i.externalHostname)
+	i.Logger().Println("Check DNS Record for: ", i.ExternalHostname)
 	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, false, func(ctx context.Context) (bool, error) {
-		m.SetQuestion(dns.Fqdn(i.externalHostname), dns.TypeA)
+		m.SetQuestion(dns.Fqdn(i.ExternalHostname), dns.TypeA)
 		r, _, err := c.Exchange(m, "8.8.8.8:53")
 
 		if err != nil {
-			log.Println(err)
+			i.Logger().Println(err)
+			return false, nil
 		}
 
 		if len(r.Answer) == 0 {
-			log.Println("No record.")
+			i.Logger().Println("No record.")
+			return false, nil
 		}
 
 		for _, ans := range r.Answer {
 			if a, ok := ans.(*dns.A); ok {
-				log.Println("Record is available:", a.A)
+				i.Logger().Println("Record is available:", a.A)
+				return true, nil
 			}
-			return true, nil
 		}
 
-		log.Printf("Record for %s is not yet available, retrying...", i.externalHostname)
+		i.Logger().Infof("Record for %s is not yet available, retrying...", i.ExternalHostname)
 		return false, nil
 	})
 
 	if err != nil {
-		log.Fatal("Timed out waiting for DNS Record to be ready:", err)
+		i.Logger().Fatal("Timed out waiting for DNS Record to be ready:", err)
 		return err
 	}
 	return nil

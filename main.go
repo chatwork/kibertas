@@ -19,6 +19,9 @@ package main
 
 import (
 	"log"
+	"runtime"
+	"strconv"
+	"strings"
 
 	certmanager "github.com/cw-sakamoto/kibertas/cmd/cert-manager"
 	clusterautoscaler "github.com/cw-sakamoto/kibertas/cmd/cluster-autoscaler"
@@ -26,22 +29,13 @@ import (
 	"github.com/cw-sakamoto/kibertas/cmd/ingress"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	// Uncomment to load all auth plugins
-	// _ "k8s.io/client-go/plugin/pkg/client/auth"
-	//
-	// Or uncomment to load specific auth plugins
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/azure"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 func main() {
 	var debug bool
 	var logLevel string
-	var logr *logrus.Logger
+	var logger func() *logrus.Entry
 	var rootCmd = &cobra.Command{Use: "kibertas"}
-
-	log.Println("top log level: ", logLevel)
 
 	var cmdTest = &cobra.Command{
 		Use:   "test",
@@ -57,7 +51,7 @@ func main() {
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return clusterautoscaler.NewClusterAutoscaler().Check()
+			return clusterautoscaler.NewClusterAutoscaler(debug, logger).Check()
 		},
 	}
 
@@ -66,7 +60,7 @@ func main() {
 		Short: "test ingress(aws-load-balancer-controller, external-dns)",
 		Long:  "test ingress(aws-load-balancer-controller, external-dns))",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return ingress.NewIngress().Check()
+			return ingress.NewIngress(debug, logger).Check()
 		},
 	}
 
@@ -75,7 +69,7 @@ func main() {
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fluent.NewFluent().Check()
+			return fluent.NewFluent(debug, logger).Check()
 		},
 	}
 
@@ -84,7 +78,7 @@ func main() {
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return certmanager.NewCertManager(debug, logr).Check()
+			return certmanager.NewCertManager(debug, logger).Check()
 		},
 	}
 
@@ -93,21 +87,22 @@ func main() {
 		Short: "test all application",
 		Long:  "test all application",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := ingress.NewIngress().Check()
+			logger().Info("test all application")
+			err := ingress.NewIngress(debug, logger).Check()
 			if err != nil {
 				return err
 			}
-			err = fluent.NewFluent().Check()
-			if err != nil {
-				return err
-			}
-
-			err = clusterautoscaler.NewClusterAutoscaler().Check()
+			err = clusterautoscaler.NewClusterAutoscaler(debug, logger).Check()
 			if err != nil {
 				return err
 			}
 
-			err = certmanager.NewCertManager(debug, logr).Check()
+			err = certmanager.NewCertManager(debug, logger).Check()
+			if err != nil {
+				return err
+			}
+
+			err = fluent.NewFluent(debug, logger).Check()
 			if err != nil {
 				return err
 			}
@@ -116,29 +111,49 @@ func main() {
 	}
 
 	rootCmd.AddCommand(cmdTest)
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
+	logger = initLogger(logLevel)
+	if debug {
+		logger().Debug("debug mode enabled")
+	}
+	logger().Debug("log level: ", logLevel)
+
 	cmdTest.AddCommand(cmdAll)
 	cmdTest.AddCommand(cmdFluent)
 	cmdTest.AddCommand(cmdClusterAutoscaler)
 	cmdTest.AddCommand(cmdIngress)
 	cmdTest.AddCommand(cmdCertManager)
 
-	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal("error: ", err)
+		panic(err)
+	}
+}
 
-	log.Println("before Execute log level: ", logLevel)
-
-	logr = logrus.New()
-	logr.SetFormatter(&logrus.TextFormatter{})
+func initLogger(logLevel string) func() *logrus.Entry {
+	logr := logrus.New()
+	logr.SetFormatter(&logrus.JSONFormatter{})
 	level, err := logrus.ParseLevel(logLevel)
 
 	if err != nil {
-		log.Fatal("invalid log level: ", err)
+		logr.Fatal("invalid log level: ", err)
+		panic(err)
 	}
 
 	logr.SetLevel(level)
 
-	if err := rootCmd.Execute(); err != nil {
-		log.Fatal("error: ", err)
-		panic(err)
+	return func() *logrus.Entry {
+		_, file, line, ok := runtime.Caller(1)
+		if !ok {
+			panic("Could not get context info for logger!")
+		}
+
+		filename := file[strings.LastIndex(file, "/")+1:] + ":" + strconv.Itoa(line)
+		//funcname := runtime.FuncForPC(pc).Name()
+		//lastSlashIndex := strings.LastIndex(funcname, "/")
+		//fn := funcname[lastSlashIndex+1:]
+		//return logr.WithField("file", filename).WithField("function", fn)
+		return logr.WithField("file", filename)
 	}
 }

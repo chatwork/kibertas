@@ -8,12 +8,13 @@ import (
 
 	cmapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/cw-sakamoto/kibertas/cmd"
 	"github.com/cw-sakamoto/kibertas/config"
 	"github.com/cw-sakamoto/kibertas/util"
 	"github.com/cw-sakamoto/kibertas/util/k8s"
@@ -21,19 +22,16 @@ import (
 )
 
 type CertManager struct {
-	namespace string
-	certName  string
-	debug     bool
-	logr      *logrus.Logger
-	client    client.Client
-	clientset *kubernetes.Clientset
+	*cmd.Checker
+	CertName string
+	Client   client.Client
 }
 
-func NewCertManager(debug bool, logr *logrus.Logger) *CertManager {
+func NewCertManager(debug bool, logger func() *logrus.Entry) *CertManager {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	logr.Printf("cert-manager check application namespace: %s\n", namespace)
+	logger().Infof("cert-manager check application namespace: %s", namespace)
 
 	certName := "sample"
 
@@ -44,37 +42,34 @@ func NewCertManager(debug bool, logr *logrus.Logger) *CertManager {
 	_ = cmapiv1.AddToScheme(scheme)
 
 	return &CertManager{
-		namespace: namespace,
-		certName:  certName,
-		debug:     debug,
-		logr:      logr,
-		clientset: config.NewK8sClientset(),
-		client:    config.NewK8sClient(client.Options{Scheme: scheme}),
+		Checker:  cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger),
+		CertName: certName,
+		Client:   config.NewK8sClient(client.Options{Scheme: scheme}),
 	}
 }
 
 func (c *CertManager) Check() error {
-	err := k8s.CreateNamespace(c.namespace, c.clientset)
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+
+	err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: c.Namespace,
+		}})
 	if err != nil {
 		return err
 	}
+	defer k.DeleteNamespace()
 
-	if c.debug {
-		c.logr.Infof("Preserve resources in %s", c.namespace)
-	} else {
-		defer k8s.DeleteNamespace(c.namespace, c.clientset)
-	}
-
-	caName := c.certName + "-ca"
-	caSecretName := c.certName + "-tls"
-	issuerName := c.certName + "-issuer"
-	certificateName := c.certName + "-cert"
+	caName := c.CertName + "-ca"
+	caSecretName := c.CertName + "-tls"
+	issuerName := c.CertName + "-issuer"
+	certificateName := c.CertName + "-cert"
 	certificateSecretName := certificateName
 
 	rootCA := &cmapiv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      caName,
-			Namespace: c.namespace,
+			Namespace: c.Namespace,
 		},
 		Spec: cmapiv1.CertificateSpec{
 			SecretName: caSecretName,
@@ -93,24 +88,24 @@ func (c *CertManager) Check() error {
 	}
 
 	//Create CA
-	c.logr.Infoln("Create RootCA:", caName)
-	err = c.client.Create(context.Background(), rootCA)
+	c.Logger().Infoln("Create RootCA:", caName)
+	err = c.Client.Create(context.Background(), rootCA)
 	if err != nil {
 		return err
 	}
-	if !c.debug {
-		defer c.client.Delete(context.Background(), rootCA)
+	if !c.Debug {
+		defer c.Client.Delete(context.Background(), rootCA)
 	}
 
-	secretClient := c.clientset.CoreV1().Secrets(c.namespace)
+	secretClient := c.Clientset.CoreV1().Secrets(c.Namespace)
 
 	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, caSecretName, metav1.GetOptions{})
 		if err != nil {
-			c.logr.WithError(err).Errorf("Waiting for secret %s to be ready\n", caSecretName)
+			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", caSecretName)
 			return false, nil
 		}
-		c.logr.Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
+		c.Logger().Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
 		return true, nil
 	})
 	if err != nil {
@@ -121,7 +116,7 @@ func (c *CertManager) Check() error {
 	issuer := &cmapiv1.Issuer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      issuerName,
-			Namespace: c.namespace,
+			Namespace: c.Namespace,
 		},
 		Spec: cmapiv1.IssuerSpec{
 			IssuerConfig: cmapiv1.IssuerConfig{
@@ -132,21 +127,21 @@ func (c *CertManager) Check() error {
 		},
 	}
 
-	c.logr.Infoln("Create Issuer:", issuerName)
-	err = c.client.Create(context.Background(), issuer)
+	c.Logger().Infoln("Create Issuer:", issuerName)
+	err = c.Client.Create(context.Background(), issuer)
 	if err != nil {
 		return err
 	}
 
-	if !c.debug {
-		defer c.client.Delete(context.Background(), issuer)
+	if !c.Debug {
+		defer c.Client.Delete(context.Background(), issuer)
 	}
 
 	//Create Certificate
 	certificate := &cmapiv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      certificateName,
-			Namespace: c.namespace,
+			Namespace: c.Namespace,
 		},
 		Spec: cmapiv1.CertificateSpec{
 			SecretName: certificateSecretName,
@@ -155,17 +150,17 @@ func (c *CertManager) Check() error {
 				Kind: "Issuer",
 			},
 			DNSNames: []string{
-				c.certName,
-				c.certName + "." + c.namespace + ".svc",
-				c.certName + "." + c.namespace + ".svc.cluster.local",
+				c.CertName,
+				c.CertName + "." + c.Namespace + ".svc",
+				c.CertName + "." + c.Namespace + ".svc.cluster.local",
 			},
 		},
 	}
 
-	c.logr.Infoln("Create Certificate:", certificateName)
-	err = c.client.Create(context.Background(), certificate)
-	if !c.debug {
-		defer c.client.Delete(context.Background(), certificate)
+	c.Logger().Infoln("Create Certificate:", certificateName)
+	err = c.Client.Create(context.Background(), certificate)
+	if !c.Debug {
+		defer c.Client.Delete(context.Background(), certificate)
 	}
 
 	if err != nil {
@@ -175,10 +170,10 @@ func (c *CertManager) Check() error {
 	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, certificateSecretName, metav1.GetOptions{})
 		if err != nil {
-			c.logr.WithError(err).Errorf("Waiting for secret %s to be ready\n", certificateSecretName)
+			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", certificateSecretName)
 			return false, nil
 		}
-		c.logr.Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
+		c.Logger().Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
 		return true, nil
 	})
 	if err != nil {
