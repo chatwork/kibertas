@@ -1,0 +1,63 @@
+package notify
+
+import (
+	"bytes"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+)
+
+type Chatwork struct {
+	ApiToken string
+	RoomId   string
+	Logger   func() *logrus.Entry
+	Messages strings.Builder
+}
+
+func NewChatwork(apiToken string, roomId string, logger func() *logrus.Entry) *Chatwork {
+	return &Chatwork{
+		ApiToken: apiToken,
+		RoomId:   roomId,
+		Logger:   logger,
+	}
+}
+
+func (c *Chatwork) AddMessage(message string) {
+	c.Messages.WriteString(message)
+}
+
+func (c *Chatwork) Send() error {
+	// APIのURLを作成
+	apiUrl := fmt.Sprintf("https://api.chatwork.com/v2/rooms/%s/messages", c.RoomId)
+
+	// メッセージをエンコード
+	data := url.Values{}
+	data.Set("body", c.Messages.String())
+
+	// リクエストを作成
+	req, err := http.NewRequest("POST", apiUrl, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		c.Logger().Fatal(err)
+		return err
+	}
+
+	// ヘッダーを設定
+	req.Header.Add("X-ChatWorkToken", c.ApiToken)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストを送信
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.Logger().Fatal(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// ステータスコードを表示
+	c.Logger().Infoln("Chatwork Send Message Status:", resp.Status)
+	return nil
+}

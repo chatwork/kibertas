@@ -14,6 +14,7 @@ import (
 	"github.com/cw-sakamoto/kibertas/config"
 	"github.com/cw-sakamoto/kibertas/util"
 	"github.com/cw-sakamoto/kibertas/util/k8s"
+	"github.com/cw-sakamoto/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,12 +23,13 @@ type ClusterAutoscaler struct {
 	DeploymentName string
 }
 
-func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry) *ClusterAutoscaler {
+func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *ClusterAutoscaler {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cluster-autoscaler-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
 
 	logger().Infof("cluster-autoscaler check application namespace: %s\n", namespace)
+	chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
 
 	deploymentName := "sample-for-scale"
 
@@ -36,21 +38,23 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry) *ClusterAutos
 	}
 
 	return &ClusterAutoscaler{
-		Checker:        cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger),
+		Checker:        cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
 		DeploymentName: deploymentName,
 	}
 }
 
 func (c *ClusterAutoscaler) Check() error {
+	c.Chatwork.AddMessage("cluster-autoscaler check start\n")
+	defer c.Chatwork.Send()
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
 
-	ns := &apiv1.Namespace{
+	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.Namespace,
 		},
+	}); err != nil {
+		return err
 	}
-
-	k.CreateNamespace(ns)
 	defer k.DeleteNamespace()
 
 	nodeListOption := metav1.ListOptions{
@@ -62,14 +66,17 @@ func (c *ClusterAutoscaler) Check() error {
 		return err
 	}
 
-	c.Logger().Infof("spot nodes: %d\n", len(nodes.Items))
+	c.Logger().Infof("spot nodes: %d", len(nodes.Items))
+	c.Chatwork.AddMessage(fmt.Sprintf("spot nodes: %d\n", len(nodes.Items)))
 	desireReplicacount := len(nodes.Items) + 1
+	c.Chatwork.AddMessage(fmt.Sprintf("create deployment with desire replicas %d\n", desireReplicacount))
 
 	err = k.CreateDeployment(createDeploymentObject(c.DeploymentName, desireReplicacount))
 	if err != nil {
 		return err
 	}
 	defer k.DeleteDeployment(c.DeploymentName)
+	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
 	return nil
 }
 

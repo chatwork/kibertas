@@ -53,7 +53,7 @@ func (k *K8s) CreateNamespace(ns *apiv1.Namespace) error {
 func (k *K8s) DeleteNamespace() error {
 	err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), k.namespace, metav1.DeleteOptions{})
 	if err != nil {
-		k.logger().Fatalf("Namespace %s delete error", k.namespace)
+		k.logger().Errorf("Namespace %s delete error", k.namespace)
 		return err
 	}
 	k.logger().Infof("Namespace %s deleted", k.namespace)
@@ -70,7 +70,7 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment) error {
 		k.logger().Infof("Already exists, updating deployment: %s", deployment.Name)
 		_, err = deploymentsClient.Update(context.TODO(), deployment, metav1.UpdateOptions{})
 		if err != nil {
-			k.logger().Fatal("Error updating deployment:", err)
+			k.logger().Error("Error updating deployment:", err)
 			return err
 		}
 	} else if err != nil {
@@ -93,7 +93,7 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment) error {
 	})
 
 	if err != nil {
-		k.logger().Fatal("Timed out waiting for pods to be ready:", err)
+		k.logger().Error("Timed out waiting for pods to be ready:", err)
 		return err
 	}
 
@@ -109,7 +109,7 @@ func (k *K8s) DeleteDeployment(deploymentName string) error {
 	if err := deploymentsClient.Delete(context.TODO(), deploymentName, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
-		k.logger().Fatal("Error deleting deployment: ", err)
+		k.logger().Error("Error deleting deployment: ", err)
 		return err
 	}
 	k.logger().Infoln("Deleted deployment.")
@@ -125,11 +125,11 @@ func (k *K8s) CreateService(service *apiv1.Service) error {
 		k.logger().Infof("Already exists, updating service: %s", service.Name)
 		_, err = serviceClient.Update(context.TODO(), service, metav1.UpdateOptions{})
 		if err != nil {
-			k.logger().Fatal("Error updating service:", err)
+			k.logger().Error("Error updating service:", err)
 			return err
 		}
 	} else if err != nil {
-		k.logger().Fatalf("Error creating service: %s", err)
+		k.logger().Errorf("Error creating service: %s", err)
 		return err
 	}
 	k.logger().Infoln("Created service.")
@@ -144,7 +144,7 @@ func (k *K8s) DeleteService(serviceName string) error {
 	if err := serviceClient.Delete(context.TODO(), serviceName, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
-		k.logger().Fatal("Error deleting service:", err)
+		k.logger().Error("Error deleting service:", err)
 		return err
 	}
 	k.logger().Infoln("Deleted service.")
@@ -160,11 +160,11 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress) error {
 		k.logger().Infof("Already exists, updating ingress: %s", ingress.Name)
 		_, err = ingressClient.Update(context.TODO(), ingress, metav1.UpdateOptions{})
 		if err != nil {
-			k.logger().Fatal("Error updating ingress:", err)
+			k.logger().Error("Error updating ingress:", err)
 			return err
 		}
 	} else if err != nil {
-		k.logger().Fatal("Error creating ingress:", err)
+		k.logger().Error("Error creating ingress:", err)
 		return err
 	}
 
@@ -185,7 +185,7 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress) error {
 	})
 
 	if err != nil {
-		k.logger().Fatal("Timed out waiting for ingress to be ready:", err)
+		k.logger().Error("Timed out waiting for ingress to be ready:", err)
 		return err
 	}
 
@@ -200,7 +200,7 @@ func (k *K8s) DeleteIngress(ingressName string) error {
 	if err := ingressClient.Delete(context.TODO(), ingressName, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
-		k.logger().Fatal("Error deleting ingress:", err)
+		k.logger().Error("Error deleting ingress:", err)
 		return err
 	}
 	k.logger().Infof("Deleted ingress: %s", ingressName)

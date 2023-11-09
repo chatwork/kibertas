@@ -18,7 +18,7 @@ limitations under the License.
 package main
 
 import (
-	"log"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -27,6 +27,7 @@ import (
 	clusterautoscaler "github.com/cw-sakamoto/kibertas/cmd/cluster-autoscaler"
 	"github.com/cw-sakamoto/kibertas/cmd/fluent"
 	"github.com/cw-sakamoto/kibertas/cmd/ingress"
+	"github.com/cw-sakamoto/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,7 @@ func main() {
 	var debug bool
 	var logLevel string
 	var logger func() *logrus.Entry
+	var chatwork *notify.Chatwork
 	var rootCmd = &cobra.Command{Use: "kibertas"}
 
 	var cmdTest = &cobra.Command{
@@ -51,7 +53,7 @@ func main() {
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return clusterautoscaler.NewClusterAutoscaler(debug, logger).Check()
+			return clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork).Check()
 		},
 	}
 
@@ -60,7 +62,7 @@ func main() {
 		Short: "test ingress(aws-load-balancer-controller, external-dns)",
 		Long:  "test ingress(aws-load-balancer-controller, external-dns))",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return ingress.NewIngress(debug, logger).Check()
+			return ingress.NewIngress(debug, logger, chatwork).Check()
 		},
 	}
 
@@ -69,7 +71,7 @@ func main() {
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fluent.NewFluent(debug, logger).Check()
+			return fluent.NewFluent(debug, logger, chatwork).Check()
 		},
 	}
 
@@ -78,7 +80,7 @@ func main() {
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return certmanager.NewCertManager(debug, logger).Check()
+			return certmanager.NewCertManager(debug, logger, chatwork).Check()
 		},
 	}
 
@@ -88,21 +90,21 @@ func main() {
 		Long:  "test all application",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger().Info("test all application")
-			err := ingress.NewIngress(debug, logger).Check()
+			err := ingress.NewIngress(debug, logger, chatwork).Check()
 			if err != nil {
 				return err
 			}
-			err = clusterautoscaler.NewClusterAutoscaler(debug, logger).Check()
-			if err != nil {
-				return err
-			}
-
-			err = certmanager.NewCertManager(debug, logger).Check()
+			err = clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork).Check()
 			if err != nil {
 				return err
 			}
 
-			err = fluent.NewFluent(debug, logger).Check()
+			err = certmanager.NewCertManager(debug, logger, chatwork).Check()
+			if err != nil {
+				return err
+			}
+
+			err = fluent.NewFluent(debug, logger, chatwork).Check()
 			if err != nil {
 				return err
 			}
@@ -119,6 +121,8 @@ func main() {
 	}
 	logger().Debug("log level: ", logLevel)
 
+	chatwork = initChatwork(logger)
+
 	cmdTest.AddCommand(cmdAll)
 	cmdTest.AddCommand(cmdFluent)
 	cmdTest.AddCommand(cmdClusterAutoscaler)
@@ -126,9 +130,14 @@ func main() {
 	cmdTest.AddCommand(cmdCertManager)
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal("error: ", err)
-		panic(err)
+		logger().Fatal("error: ", err)
 	}
+}
+
+func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {
+	apiToken := os.Getenv("CHATWORK_API_TOKEN")
+	roomId := os.Getenv("CHATWORK_ROOM_ID")
+	return notify.NewChatwork(apiToken, roomId, logger)
 }
 
 func initLogger(logLevel string) func() *logrus.Entry {
@@ -138,7 +147,6 @@ func initLogger(logLevel string) func() *logrus.Entry {
 
 	if err != nil {
 		logr.Fatal("invalid log level: ", err)
-		panic(err)
 	}
 
 	logr.SetLevel(level)

@@ -18,6 +18,7 @@ import (
 	"github.com/cw-sakamoto/kibertas/config"
 	"github.com/cw-sakamoto/kibertas/util"
 	"github.com/cw-sakamoto/kibertas/util/k8s"
+	"github.com/cw-sakamoto/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,11 +28,12 @@ type CertManager struct {
 	Client   client.Client
 }
 
-func NewCertManager(debug bool, logger func() *logrus.Entry) *CertManager {
+func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *CertManager {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
 	logger().Infof("cert-manager check application namespace: %s", namespace)
+	chatwork.AddMessage(fmt.Sprintf("cert-manager check application namespace: %s\n", namespace))
 
 	certName := "sample"
 
@@ -42,13 +44,15 @@ func NewCertManager(debug bool, logger func() *logrus.Entry) *CertManager {
 	_ = cmapiv1.AddToScheme(scheme)
 
 	return &CertManager{
-		Checker:  cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger),
+		Checker:  cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
 		CertName: certName,
 		Client:   config.NewK8sClient(client.Options{Scheme: scheme}),
 	}
 }
 
 func (c *CertManager) Check() error {
+	c.Chatwork.AddMessage("cert-manager check start\n")
+	defer c.Chatwork.Send()
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
 
 	err := k.CreateNamespace(&apiv1.Namespace{
@@ -56,10 +60,26 @@ func (c *CertManager) Check() error {
 			Name: c.Namespace,
 		}})
 	if err != nil {
+		c.Logger().Error("Error create namespace:", err)
+		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
 		return err
 	}
 	defer k.DeleteNamespace()
 
+	err = c.createCert()
+	if err != nil {
+		c.Logger().Error("Error create certificate:", err)
+		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
+		return err
+	}
+	c.Chatwork.AddMessage("cert-manager check finished\n")
+	return nil
+}
+
+// createCert creates a certificate with cert-manager
+// CRなので、client-goではなく、client-runtimeを使う
+// ここでしか作らないリソースなので、utilのほうには入れない
+func (c *CertManager) createCert() error {
 	caName := c.CertName + "-ca"
 	caSecretName := c.CertName + "-tls"
 	issuerName := c.CertName + "-issuer"
@@ -89,7 +109,8 @@ func (c *CertManager) Check() error {
 
 	//Create CA
 	c.Logger().Infoln("Create RootCA:", caName)
-	err = c.Client.Create(context.Background(), rootCA)
+	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", caName))
+	err := c.Client.Create(context.Background(), rootCA)
 	if err != nil {
 		return err
 	}
@@ -102,13 +123,15 @@ func (c *CertManager) Check() error {
 	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, caSecretName, metav1.GetOptions{})
 		if err != nil {
-			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", caSecretName)
+			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready", caSecretName)
 			return false, nil
 		}
 		c.Logger().Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
 		return true, nil
 	})
 	if err != nil {
+		c.Logger().Error("Timed out waiting for RootCA secret to be ready:", err)
+		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for RootCA secret to be ready: %s", err))
 		return err
 	}
 
@@ -128,6 +151,7 @@ func (c *CertManager) Check() error {
 	}
 
 	c.Logger().Infoln("Create Issuer:", issuerName)
+	c.Chatwork.AddMessage(fmt.Sprintf("Create Issuer: %s\n", issuerName))
 	err = c.Client.Create(context.Background(), issuer)
 	if err != nil {
 		return err
@@ -158,6 +182,7 @@ func (c *CertManager) Check() error {
 	}
 
 	c.Logger().Infoln("Create Certificate:", certificateName)
+	c.Chatwork.AddMessage(fmt.Sprintf("Create Certificate: %s\n", certificateName))
 	err = c.Client.Create(context.Background(), certificate)
 	if !c.Debug {
 		defer c.Client.Delete(context.Background(), certificate)
@@ -177,6 +202,8 @@ func (c *CertManager) Check() error {
 		return true, nil
 	})
 	if err != nil {
+		c.Logger().Error("Timed out waiting for Certificate secret to be ready:", err)
+		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for Certificate secret to be ready: %s", err))
 		return err
 	}
 

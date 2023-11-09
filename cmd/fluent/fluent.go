@@ -10,6 +10,7 @@ import (
 	"github.com/cw-sakamoto/kibertas/config"
 	"github.com/cw-sakamoto/kibertas/util"
 	"github.com/cw-sakamoto/kibertas/util/k8s"
+	"github.com/cw-sakamoto/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -29,11 +30,12 @@ type Fluent struct {
 	Awscfg         aws.Config
 }
 
-func NewFluent(debug bool, logger func() *logrus.Entry) *Fluent {
+func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *Fluent {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("fluent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	logger().Infof("fluent check application namespace: %s\n", namespace)
+	logger().Infof("fluent check application namespace: %s", namespace)
+	chatwork.AddMessage(fmt.Sprintf("fluent check application namespace: %s\n", namespace))
 
 	deploymentName := "burst-log-generator"
 	env := "cwtest"
@@ -52,7 +54,7 @@ func NewFluent(debug bool, logger func() *logrus.Entry) *Fluent {
 	}
 
 	return &Fluent{
-		Checker:        cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger),
+		Checker:        cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
 		Env:            env,
 		DeploymentName: deploymentName,
 		LogBucketName:  logBucketName,
@@ -61,6 +63,8 @@ func NewFluent(debug bool, logger func() *logrus.Entry) *Fluent {
 }
 
 func (f *Fluent) Check() error {
+	f.Chatwork.AddMessage("fluent check start\n")
+	defer f.Chatwork.Send()
 	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
 
 	k.CreateNamespace(&apiv1.Namespace{
@@ -76,8 +80,9 @@ func (f *Fluent) Check() error {
 	defer k.DeleteDeployment(f.DeploymentName)
 	err = f.checkS3Object()
 	if err != nil {
-		return err
+		return fmt.Errorf("fluent check err: %w", err)
 	}
+	f.Chatwork.AddMessage("fluent check finished\n")
 	return nil
 }
 
@@ -92,18 +97,19 @@ func (f *Fluent) checkS3Object() error {
 		Prefix: aws.String(targetPrefix),
 	}
 
-	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 20*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 20*time.Minute, false, func(ctx context.Context) (bool, error) {
 		f.Logger().Infof("Wait fluentd output to s3://%s/%s ...", targetBucket, targetPrefix)
 
 		result, err := client.ListObjectsV2(context.TODO(), input)
 		if err != nil {
-			f.Logger().Fatal("Got an error retrieving items:", err)
+			f.Logger().Error("Got an error retrieving items:", err)
 			return false, nil
 		}
 
 		if len(result.Contents) != 0 {
 			for _, item := range result.Contents {
 				if item.LastModified.After(t) {
+					f.Chatwork.AddMessage(fmt.Sprintf("fluentd output to s3://%s/%s/%s\n", targetBucket, targetPrefix, *item.Key))
 					f.Logger().Println("Name:          ", *item.Key)
 					f.Logger().Println("Last modified: ", *item.LastModified)
 					f.Logger().Println("Size:          ", item.Size)
@@ -117,11 +123,11 @@ func (f *Fluent) checkS3Object() error {
 	})
 
 	if err != nil {
-		f.Logger().Fatal("Timed out waiting for output S3 Object:", err)
+		f.Logger().Error("Timed out waiting for output S3 Object:", err)
 		return err
 	}
 
-	f.Logger().Println("All S3 Objects are available.")
+	f.Logger().Infoln("All S3 Objects are available.")
 
 	return nil
 }

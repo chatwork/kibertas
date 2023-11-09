@@ -10,6 +10,7 @@ import (
 	"github.com/cw-sakamoto/kibertas/config"
 	"github.com/cw-sakamoto/kibertas/util"
 	"github.com/cw-sakamoto/kibertas/util/k8s"
+	"github.com/cw-sakamoto/kibertas/util/notify"
 
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
@@ -27,11 +28,12 @@ type Ingress struct {
 	ExternalHostname string
 }
 
-func NewIngress(debug bool, logger func() *logrus.Entry) *Ingress {
+func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *Ingress {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
 	logger().Infof("ingress check application namespace: %s", namespace)
+	chatwork.AddMessage(fmt.Sprintf("ingress check application namespace: %s\n", namespace))
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
@@ -44,44 +46,45 @@ func NewIngress(debug bool, logger func() *logrus.Entry) *Ingress {
 	}
 
 	return &Ingress{
-		Checker:          cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger),
+		Checker:          cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
 		ResourceName:     resourceName,
 		ExternalHostname: externalHostName,
 	}
 }
 
 func (i *Ingress) Check() error {
+	i.Chatwork.AddMessage("ingress check start\n")
+	defer i.Chatwork.Send()
 	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
 
-	k.CreateNamespace(&apiv1.Namespace{
+	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: i.Namespace,
-		}})
+		}}); err != nil {
+		return err
+	}
 	defer k.DeleteNamespace()
 
-	err := k.CreateDeployment(createDeploymentObject(i.ResourceName))
-	if err != nil {
+	if err := k.CreateDeployment(createDeploymentObject(i.ResourceName)); err != nil {
 		return err
 	}
 	defer k.DeleteDeployment(i.ResourceName)
 
-	err = k.CreateService(createServiceObject(i.ResourceName))
-	if err != nil {
+	if err := k.CreateService(createServiceObject(i.ResourceName)); err != nil {
 		return err
 	}
 	defer k.DeleteService(i.ResourceName)
 
-	err = k.CreateIngress(createIngressObject(i.ResourceName, i.ExternalHostname))
-	if err != nil {
+	if err := k.CreateIngress(createIngressObject(i.ResourceName, i.ExternalHostname)); err != nil {
 		return err
 	}
 	defer k.DeleteIngress(i.ResourceName)
 
-	err = i.checkDNSRecord()
-	if err != nil {
+	if err := i.checkDNSRecord(); err != nil {
 		return err
 	}
 
+	i.Chatwork.AddMessage("ingress check finished\n")
 	return nil
 }
 
@@ -219,6 +222,7 @@ func (i *Ingress) checkDNSRecord() error {
 		for _, ans := range r.Answer {
 			if a, ok := ans.(*dns.A); ok {
 				i.Logger().Println("Record is available:", a.A)
+				i.Chatwork.AddMessage(fmt.Sprintf("Record is available: %s\n", a.A))
 				return true, nil
 			}
 		}
@@ -228,7 +232,7 @@ func (i *Ingress) checkDNSRecord() error {
 	})
 
 	if err != nil {
-		i.Logger().Fatal("Timed out waiting for DNS Record to be ready:", err)
+		i.Logger().Error("Timed out waiting for DNS Record to be ready:", err)
 		return err
 	}
 	return nil
