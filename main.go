@@ -25,6 +25,7 @@ import (
 
 	certmanager "github.com/cw-sakamoto/kibertas/cmd/cert-manager"
 	clusterautoscaler "github.com/cw-sakamoto/kibertas/cmd/cluster-autoscaler"
+	datadogagent "github.com/cw-sakamoto/kibertas/cmd/datadog-agent"
 	"github.com/cw-sakamoto/kibertas/cmd/fluent"
 	"github.com/cw-sakamoto/kibertas/cmd/ingress"
 	"github.com/cw-sakamoto/kibertas/util/notify"
@@ -43,8 +44,8 @@ func main() {
 		Use:   "test",
 		Short: "test",
 		Long:  "test",
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
 		},
 	}
 
@@ -72,6 +73,15 @@ func main() {
 		Long:  "test fluent(fluent-bit, fluentd)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fluent.NewFluent(debug, logger, chatwork).Check()
+		},
+	}
+
+	var cmdDatadogAgent = &cobra.Command{
+		Use:   "datadog-agent",
+		Short: "test datadog-agent",
+		Long:  "test datadog-agent",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return datadogagent.NewDatadogAgent(debug, logger, chatwork).Check()
 		},
 	}
 
@@ -128,8 +138,10 @@ func main() {
 	cmdTest.AddCommand(cmdClusterAutoscaler)
 	cmdTest.AddCommand(cmdIngress)
 	cmdTest.AddCommand(cmdCertManager)
+	cmdTest.AddCommand(cmdDatadogAgent)
 
 	if err := rootCmd.Execute(); err != nil {
+		rootCmd.SilenceErrors = false
 		logger().Fatal("error: ", err)
 	}
 }

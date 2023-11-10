@@ -3,6 +3,7 @@ module github.com/cw-sakamoto/kibertas
 go 1.21.3
 
 require (
+	github.com/DataDog/datadog-api-client-go/v2 v2.18.0
 	github.com/aws/aws-sdk-go-v2 v1.22.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.42.0
 	github.com/cert-manager/cert-manager v1.13.2
@@ -15,6 +16,7 @@ require (
 )
 
 require (
+	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.5.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.15.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.1 // indirect
@@ -39,6 +41,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect

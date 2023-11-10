@@ -71,8 +71,7 @@ func (c *ClusterAutoscaler) Check() error {
 	desireReplicacount := len(nodes.Items) + 1
 	c.Chatwork.AddMessage(fmt.Sprintf("create deployment with desire replicas %d\n", desireReplicacount))
 
-	err = k.CreateDeployment(createDeploymentObject(c.DeploymentName, desireReplicacount))
-	if err != nil {
+	if err = k.CreateDeployment(createDeploymentObject(c.DeploymentName, desireReplicacount)); err != nil {
 		return err
 	}
 	defer k.DeleteDeployment(c.DeploymentName)

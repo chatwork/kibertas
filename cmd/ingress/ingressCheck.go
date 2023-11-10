@@ -204,6 +204,7 @@ func (i *Ingress) checkDNSRecord() error {
 	c := new(dns.Client)
 	m := new(dns.Msg)
 
+	i.Chatwork.AddMessage("ingress create finished\n")
 	i.Logger().Println("Check DNS Record for: ", i.ExternalHostname)
 	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, false, func(ctx context.Context) (bool, error) {
 		m.SetQuestion(dns.Fqdn(i.ExternalHostname), dns.TypeA)
