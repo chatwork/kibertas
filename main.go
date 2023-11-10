@@ -38,7 +38,11 @@ func main() {
 	var logLevel string
 	var logger func() *logrus.Entry
 	var chatwork *notify.Chatwork
-	var rootCmd = &cobra.Command{Use: "kibertas"}
+	var rootCmd = &cobra.Command{
+		Use:           "kibertas",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
 
 	var cmdTest = &cobra.Command{
 		Use:   "test",
@@ -141,7 +145,6 @@ func main() {
 	cmdTest.AddCommand(cmdDatadogAgent)
 
 	if err := rootCmd.Execute(); err != nil {
-		rootCmd.SilenceErrors = false
 		logger().Fatal("error: ", err)
 	}
 }
