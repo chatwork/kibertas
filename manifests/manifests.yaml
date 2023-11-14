@@ -1,0 +1,223 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kibertas-test
+  namespace: ops
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kibertas-test
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "services"]
+  verbs: ["create", "update", "delete", "get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "update", "delete", "get", "list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["create", "update", "delete", "get", "list"]
+- apiGroups: [""]
+  resources: ["nodes","secrets"]
+  verbs: ["get", "list"]
+- apiGroups: ["cert-manager.io"]
+  resources: ["certificates", "issuers"]
+  verbs: ["create", "update", "delete", "get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kibertas-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kibertas-test
+subjects:
+- kind: ServiceAccount
+  name: kibertas-test
+  namespace: ops
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibertas-datadog-agent-test
+  namespace: ops
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccountName: kibertas-test
+      restartPolicy: Never
+      containers:
+      - name: datadog-agent-test
+        image: 738575627980.dkr.ecr.ap-northeast-1.amazonaws.com/kibertas:latest
+        imagePullPolicy: Always
+        command: ["kibertas", "test", "datadog-agent"]
+        env:
+        - name: DD_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: dd-api-key
+        - name: DD_APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: dd-app-key
+        - name: CLUSTER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: cluster-name
+        - name: CHATWORK_ROOM_ID
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-room-id
+        - name: CHATWORK_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-api-token
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibertas-ingress-test
+  namespace: ops
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccountName: kibertas-test
+      restartPolicy: Never
+      containers:
+      - name: ingress-test
+        image: 738575627980.dkr.ecr.ap-northeast-1.amazonaws.com/kibertas:latest
+        command: ["kibertas", "test", "ingress"]
+        env:
+        - name: CLUSTER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: cluster-name
+        - name: CHATWORK_ROOM_ID
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-room-id
+        - name: CHATWORK_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-api-token
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibertas-cluster-autoscaler-test
+  namespace: ops
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccountName: kibertas-test
+      restartPolicy: Never
+      containers:
+      - name: cluster-autoscaler-test
+        image: 738575627980.dkr.ecr.ap-northeast-1.amazonaws.com/kibertas:latest
+        command: ["kibertas", "test", "cluster-autoscaler"]
+        env:
+        - name: CLUSTER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: cluster-name
+        - name: CHATWORK_ROOM_ID
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-room-id
+        - name: CHATWORK_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-api-token
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibertas-cert-manager-test
+  namespace: ops
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccountName: kibertas-test
+      restartPolicy: Never
+      containers:
+      - name: cert-manager-test
+        image: 738575627980.dkr.ecr.ap-northeast-1.amazonaws.com/kibertas:latest
+        command: ["kibertas", "test", "cert-manager"]
+        env:
+        - name: CLUSTER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: cluster-name
+        - name: CHATWORK_ROOM_ID
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-room-id
+        - name: CHATWORK_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-api-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eksctl-kibertas
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kibertas-test
+subjects:
+- kind: ServiceAccount
+  name: eksctl-kibertas
+  namespace: ops
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibertas-fluent-test
+  namespace: ops
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      serviceAccountName: eksctl-kibertas
+      restartPolicy: Never
+      containers:
+      - name: fluent-test
+        image: 738575627980.dkr.ecr.ap-northeast-1.amazonaws.com/kibertas:latest
+        command: ["kibertas", "test", "fluent"]
+        env:
+        - name: CLUSTER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: cluster-name
+        - name: CHATWORK_ROOM_ID
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-room-id
+        - name: CHATWORK_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kibertas-test
+              key: chatwork-api-token

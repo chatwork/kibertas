@@ -18,6 +18,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"strconv"
@@ -152,7 +153,10 @@ func main() {
 func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {
 	apiToken := os.Getenv("CHATWORK_API_TOKEN")
 	roomId := os.Getenv("CHATWORK_ROOM_ID")
-	return notify.NewChatwork(apiToken, roomId, logger)
+	clusterName := os.Getenv("CLUSTER_NAME")
+	chatwork := notify.NewChatwork(apiToken, roomId, logger)
+	chatwork.AddMessage(fmt.Sprintf("kibertas start in %s\n", clusterName))
+	return chatwork
 }
 
 func initLogger(logLevel string) func() *logrus.Entry {
