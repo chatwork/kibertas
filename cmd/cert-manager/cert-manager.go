@@ -53,26 +53,38 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 func (c *CertManager) Check() error {
 	c.Chatwork.AddMessage("cert-manager check start\n")
 	defer c.Chatwork.Send()
+
+	if err := c.createResources(); err != nil {
+		return err
+	}
+
+	c.Chatwork.AddMessage("cert-manager check finished\n")
+	return nil
+}
+
+func (c *CertManager) createResources() error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
 
-	err := k.CreateNamespace(&apiv1.Namespace{
+	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.Namespace,
-		}})
-	if err != nil {
+		}}); err != nil {
 		c.Logger().Error("Error create namespace:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
 		return err
 	}
-	defer k.DeleteNamespace()
+	defer func() {
+		c.Chatwork.AddMessage(fmt.Sprintf("Delete Namespace: %s\n", c.Namespace))
+		if err := k.DeleteNamespace(); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprint("Error Delete namespace:", err))
+		}
+	}()
 
-	err = c.createCert()
-	if err != nil {
+	if err := c.createCert(); err != nil {
 		c.Logger().Error("Error create certificate:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
 		return err
 	}
-	c.Chatwork.AddMessage("cert-manager check finished\n")
 	return nil
 }
 
@@ -107,7 +119,7 @@ func (c *CertManager) createCert() error {
 		},
 	}
 
-	//Create CA
+	//Create RootCA
 	c.Logger().Infoln("Create RootCA:", caName)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", caName))
 	err := c.Client.Create(context.Background(), rootCA)
@@ -115,7 +127,14 @@ func (c *CertManager) createCert() error {
 		return err
 	}
 	if !c.Debug {
-		defer c.Client.Delete(context.Background(), rootCA)
+		defer func() {
+			c.Logger().Infoln("Delete RootCA:", caName)
+			c.Chatwork.AddMessage(fmt.Sprintf("Delete RootCA: %s\n", caName))
+			if err := c.Client.Delete(context.Background(), rootCA); err != nil {
+				c.Logger().Error("Error delete RootCA:", err)
+				c.Chatwork.AddMessage(fmt.Sprintf("Error delete RootCA: %s\n", err))
+			}
+		}()
 	}
 
 	secretClient := c.Clientset.CoreV1().Secrets(c.Namespace)
@@ -158,7 +177,14 @@ func (c *CertManager) createCert() error {
 	}
 
 	if !c.Debug {
-		defer c.Client.Delete(context.Background(), issuer)
+		defer func() {
+			c.Logger().Infoln("Delete Issuer:", issuerName)
+			c.Chatwork.AddMessage(fmt.Sprintf("Delete Issuer: %s\n", issuerName))
+			if err := c.Client.Delete(context.Background(), issuer); err != nil {
+				c.Logger().Error("Error delete Issuer:", err)
+				c.Chatwork.AddMessage(fmt.Sprintf("Error delete Issuer: %s\n", err))
+			}
+		}()
 	}
 
 	//Create Certificate
@@ -184,8 +210,16 @@ func (c *CertManager) createCert() error {
 	c.Logger().Infoln("Create Certificate:", certificateName)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Certificate: %s\n", certificateName))
 	err = c.Client.Create(context.Background(), certificate)
+
 	if !c.Debug {
-		defer c.Client.Delete(context.Background(), certificate)
+		defer func() {
+			c.Logger().Infoln("Delete Certificate:", certificateName)
+			c.Chatwork.AddMessage(fmt.Sprintf("Delete Certificate: %s\n", certificateName))
+			if err := c.Client.Delete(context.Background(), certificate); err != nil {
+				c.Logger().Error("Error delete Certificate:", err)
+				c.Chatwork.AddMessage(fmt.Sprintf("Error delete Certificate: %s\n", err))
+			}
+		}()
 	}
 
 	if err != nil {

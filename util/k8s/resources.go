@@ -53,10 +53,10 @@ func (k *K8s) CreateNamespace(ns *apiv1.Namespace) error {
 func (k *K8s) DeleteNamespace() error {
 	err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), k.namespace, metav1.DeleteOptions{})
 	if err != nil {
-		k.logger().Errorf("Namespace %s delete error", k.namespace)
+		k.logger().Errorf("Error Delete Namespace: %s", k.namespace)
 		return err
 	}
-	k.logger().Infof("Namespace %s deleted", k.namespace)
+	k.logger().Infof("Deleted Namespace: %s", k.namespace)
 	return nil
 }
 
@@ -64,20 +64,20 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment) error {
 	deploymentsClient := k.clientset.AppsV1().Deployments(k.namespace)
 
 	// Create Deployment
-	k.logger().Infof("Creating deployment: %s", deployment.Name)
+	k.logger().Infof("Creating Deployment: %s", deployment.Name)
 	result, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil && kerrors.IsAlreadyExists(err) {
 		k.logger().Infof("Already exists, updating deployment: %s", deployment.Name)
 		_, err = deploymentsClient.Update(context.TODO(), deployment, metav1.UpdateOptions{})
 		if err != nil {
-			k.logger().Error("Error updating deployment:", err)
+			k.logger().Error("Error Updating Deployment:", err)
 			return err
 		}
 	} else if err != nil {
-		k.logger().Infof("Error creating deployment: %s", deployment.Name)
+		k.logger().Infof("Error Creating Deployment: %s", deployment.Name)
 	}
 
-	k.logger().Infof("Created deployment %s", result.GetObjectMeta().GetName())
+	k.logger().Infof("Created Deployment %s", result.GetObjectMeta().GetName())
 
 	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
 		deployment, err := deploymentsClient.Get(ctx, deployment.Name, metav1.GetOptions{})
@@ -93,11 +93,11 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment) error {
 	})
 
 	if err != nil {
-		k.logger().Error("Timed out waiting for pods to be ready:", err)
+		k.logger().Error("Timed out waiting for Pods to be ready:", err)
 		return err
 	}
 
-	k.logger().Infoln("All pods are ready")
+	k.logger().Infoln("All Pods are ready")
 	return nil
 }
 
@@ -105,14 +105,14 @@ func (k *K8s) DeleteDeployment(deploymentName string) error {
 	deploymentsClient := k.clientset.AppsV1().Deployments(k.namespace)
 	deletePolicy := metav1.DeletePropagationForeground
 
-	k.logger().Infof("Deleting deployment: %s", deploymentName)
+	k.logger().Infof("Deleting Deployment: %s", deploymentName)
 	if err := deploymentsClient.Delete(context.TODO(), deploymentName, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
-		k.logger().Error("Error deleting deployment: ", err)
+		k.logger().Error("Error Deleting Deployment: ", err)
 		return err
 	}
-	k.logger().Infoln("Deleted deployment.")
+	k.logger().Infoln("Deleted Deployment.")
 	return nil
 }
 

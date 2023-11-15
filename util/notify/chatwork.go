@@ -26,10 +26,15 @@ func NewChatwork(apiToken string, roomId string, logger func() *logrus.Entry) *C
 }
 
 func (c *Chatwork) AddMessage(message string) {
-	c.Messages.WriteString(message)
+	if _, err := c.Messages.WriteString(message); err != nil {
+		c.Logger().Error(err)
+	}
 }
 
-func (c *Chatwork) Send() error {
+// Send メッセージを送信する
+// https://developer.chatwork.com/ja/endpoint_rooms.html#POST-rooms-room_id-messages
+// エラーが起きても問題ないので、エラーはログに出力するだけ
+func (c *Chatwork) Send() {
 	// APIのURLを作成
 	apiUrl := fmt.Sprintf("https://api.chatwork.com/v2/rooms/%s/messages", c.RoomId)
 
@@ -40,8 +45,7 @@ func (c *Chatwork) Send() error {
 	// リクエストを作成
 	req, err := http.NewRequest("POST", apiUrl, bytes.NewBufferString(data.Encode()))
 	if err != nil {
-		c.Logger().Fatal(err)
-		return err
+		c.Logger().Error(err)
 	}
 
 	// ヘッダーを設定
@@ -52,12 +56,10 @@ func (c *Chatwork) Send() error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		c.Logger().Fatal(err)
-		return err
+		c.Logger().Error(err)
 	}
 	defer resp.Body.Close()
 
 	// ステータスコードを表示
 	c.Logger().Infoln("Chatwork Send Message Status:", resp.Status)
-	return nil
 }

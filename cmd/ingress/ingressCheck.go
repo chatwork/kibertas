@@ -55,6 +55,20 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 func (i *Ingress) Check() error {
 	i.Chatwork.AddMessage("ingress check start\n")
 	defer i.Chatwork.Send()
+
+	if err := i.createResources(); err != nil {
+		return err
+	}
+
+	if err := i.checkDNSRecord(); err != nil {
+		return err
+	}
+
+	i.Chatwork.AddMessage("ingress check finished\n")
+	return nil
+}
+
+func (i *Ingress) createResources() error {
 	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
@@ -63,28 +77,41 @@ func (i *Ingress) Check() error {
 		}}); err != nil {
 		return err
 	}
-	defer k.DeleteNamespace()
+	defer func() {
+		if err := k.DeleteNamespace(); err != nil {
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		}
+	}()
 
 	if err := k.CreateDeployment(createDeploymentObject(i.ResourceName)); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
 		return err
 	}
-	defer k.DeleteDeployment(i.ResourceName)
+	defer func() {
+		if err := k.DeleteDeployment(i.ResourceName); err != nil {
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		}
+	}()
 
 	if err := k.CreateService(createServiceObject(i.ResourceName)); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
 		return err
 	}
-	defer k.DeleteService(i.ResourceName)
+	defer func() {
+		if err := k.DeleteService(i.ResourceName); err != nil {
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s", err))
+		}
+	}()
 
 	if err := k.CreateIngress(createIngressObject(i.ResourceName, i.ExternalHostname)); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
 		return err
 	}
-	defer k.DeleteIngress(i.ResourceName)
-
-	if err := i.checkDNSRecord(); err != nil {
-		return err
-	}
-
-	i.Chatwork.AddMessage("ingress check finished\n")
+	defer func() {
+		if err := k.DeleteIngress(i.ResourceName); err != nil {
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s", err))
+		}
+	}()
 	return nil
 }
 

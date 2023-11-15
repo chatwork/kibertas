@@ -21,6 +21,7 @@ import (
 type ClusterAutoscaler struct {
 	*cmd.Checker
 	DeploymentName string
+	ReplicaCount   int
 }
 
 func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *ClusterAutoscaler {
@@ -43,19 +44,11 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 	}
 }
 
+// Check is check cluster-autoscaler
+// replicaをノード数+1でdeploymentを作成する
 func (c *ClusterAutoscaler) Check() error {
 	c.Chatwork.AddMessage("cluster-autoscaler check start\n")
 	defer c.Chatwork.Send()
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
-
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: c.Namespace,
-		},
-	}); err != nil {
-		return err
-	}
-	defer k.DeleteNamespace()
 
 	nodeListOption := metav1.ListOptions{
 		LabelSelector: "eks.amazonaws.com/capacityType=SPOT",
@@ -63,38 +56,68 @@ func (c *ClusterAutoscaler) Check() error {
 
 	nodes, err := c.Clientset.CoreV1().Nodes().List(context.TODO(), nodeListOption)
 	if err != nil {
+		c.Logger().Errorf("Error List Nodes: %s", err)
+		c.Chatwork.AddMessage(fmt.Sprintf("Error List Nodes: %s\n", err))
 		return err
 	}
 
+	c.ReplicaCount = len(nodes.Items) + 1
 	c.Logger().Infof("spot nodes: %d", len(nodes.Items))
 	c.Chatwork.AddMessage(fmt.Sprintf("spot nodes: %d\n", len(nodes.Items)))
-	desireReplicacount := len(nodes.Items) + 1
-	c.Chatwork.AddMessage(fmt.Sprintf("create deployment with desire replicas %d\n", desireReplicacount))
 
-	if err = k.CreateDeployment(createDeploymentObject(c.DeploymentName, desireReplicacount)); err != nil {
+	if err := c.createResources(); err != nil {
 		return err
 	}
-	defer k.DeleteDeployment(c.DeploymentName)
-	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
 	return nil
 }
 
-func createDeploymentObject(deploymentName string, desireReplicaCount int) *appsv1.Deployment {
+func (c *ClusterAutoscaler) createResources() error {
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: c.Namespace,
+		}}); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
+		return err
+	}
+	defer func() {
+		if err := k.DeleteNamespace(); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprint("Error Delete Namespace:", err))
+		}
+	}()
+
+	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
+	if err := k.CreateDeployment(c.createDeploymentObject()); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
+		return err
+	}
+	defer func() {
+		if err := k.DeleteDeployment(c.DeploymentName); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprint("Error Delete Deployment:", err))
+		}
+	}()
+	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
+
+	return nil
+}
+
+func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: deploymentName,
+			Name: c.DeploymentName,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: util.Int32Ptr(int32(desireReplicaCount)),
+			Replicas: util.Int32Ptr(int32(c.ReplicaCount)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": deploymentName,
+					"app": c.DeploymentName,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": deploymentName,
+						"app": c.DeploymentName,
 					},
 				},
 				Spec: apiv1.PodSpec{
@@ -108,7 +131,7 @@ func createDeploymentObject(deploymentName string, desireReplicaCount int) *apps
 											{
 												Key:      "app",
 												Operator: metav1.LabelSelectorOpIn,
-												Values:   []string{deploymentName},
+												Values:   []string{c.DeploymentName},
 											},
 										},
 									},

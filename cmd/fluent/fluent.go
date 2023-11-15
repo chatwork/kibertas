@@ -65,24 +65,44 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 func (f *Fluent) Check() error {
 	f.Chatwork.AddMessage("fluent check start\n")
 	defer f.Chatwork.Send()
-	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
 
-	k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: f.Namespace,
-		}})
-	defer k.DeleteNamespace()
-
-	err := k.CreateDeployment(createDeploymentObject(f.DeploymentName))
-	if err != nil {
+	if err := f.createResources(); err != nil {
 		return err
 	}
-	defer k.DeleteDeployment(f.DeploymentName)
-	err = f.checkS3Object()
-	if err != nil {
-		return fmt.Errorf("fluent check err: %w", err)
+
+	if err := f.checkS3Object(); err != nil {
+		return err
 	}
+
 	f.Chatwork.AddMessage("fluent check finished\n")
+	return nil
+}
+
+func (f *Fluent) createResources() error {
+	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: f.Namespace,
+		}}); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
+		return err
+	}
+	defer func() {
+		if err := k.DeleteNamespace(); err != nil {
+			f.Chatwork.AddMessage(fmt.Sprint("Error Delete Namespace:", err))
+		}
+	}()
+
+	if err := k.CreateDeployment(createDeploymentObject(f.DeploymentName)); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
+		return err
+	}
+	defer func() {
+		if err := k.DeleteDeployment(f.DeploymentName); err != nil {
+			f.Chatwork.AddMessage(fmt.Sprint("Error Delete Deployment:", err))
+		}
+	}()
 	return nil
 }
 
