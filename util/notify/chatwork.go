@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -13,15 +14,22 @@ import (
 type Chatwork struct {
 	ApiToken string
 	RoomId   string
+	Site     string
 	Logger   func() *logrus.Entry
 	Messages strings.Builder
 }
 
 func NewChatwork(apiToken string, roomId string, logger func() *logrus.Entry) *Chatwork {
+	site := "api.chatwork.com"
+
+	if os.Getenv("CHATWORK_SITE") != "" {
+		site = os.Getenv("CHATWORK_SITE")
+	}
 	return &Chatwork{
 		ApiToken: apiToken,
 		RoomId:   roomId,
 		Logger:   logger,
+		Site:     site,
 	}
 }
 

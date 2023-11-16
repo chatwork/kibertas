@@ -57,21 +57,20 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 }
 
 func (d *DatadogAgent) Check() error {
+	defer d.Chatwork.Send()
+
 	if d.ApiKey == "" || d.AppKey == "" {
 		d.Logger().Error("DD_API_KEY or DD_APP_KEY is empty")
 		d.Chatwork.AddMessage("DD_API_KEY or DD_APP_KEY is empty\n")
-		d.Chatwork.Send()
 		return errors.New("DD_API_KEY or DD_APP_KEY is empty")
 	}
 	if d.ClusterName == "" {
 		d.Logger().Error("CLUSTER_NAME is empty")
 		d.Chatwork.AddMessage("CLUSTER_NAME is empty\n")
-		d.Chatwork.Send()
 		return errors.New("CLUSTER_NAME is empty")
 	}
 
 	d.Chatwork.AddMessage("datadog-agent check start\n")
-	defer d.Chatwork.Send()
 
 	if err := d.checkMetrics(); err != nil {
 		d.Chatwork.AddMessage(fmt.Sprintf("checkMetrics error: %s\n", err.Error()))
@@ -105,9 +104,14 @@ func (d *DatadogAgent) checkMetrics() error {
 	now := time.Now().Unix()
 	from := now - 60*2
 	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
-		resp, _, err := api.QueryMetrics(ddctx, from, now, query)
+		resp, r, err := api.QueryMetrics(ddctx, from, now, query)
 
 		if err != nil {
+			if r != nil && r.StatusCode == 403 {
+				return true, errors.New("403 Forbidden")
+			} else if r != nil && r.StatusCode == 401 {
+				return true, errors.New("401 Unauthorized")
+			}
 			d.Logger().Errorf("Error when querying metrics: %v", err)
 			return false, err
 		}

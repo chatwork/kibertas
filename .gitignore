@@ -1,2 +1,4 @@
 kibertas
 manifests/credentials.yaml
+.bin/
+.vscode
