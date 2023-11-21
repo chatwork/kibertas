@@ -30,7 +30,7 @@ type Fluent struct {
 	Awscfg         aws.Config
 }
 
-func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *Fluent {
+func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*Fluent, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("fluent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
@@ -53,13 +53,19 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 		logBucketName = v
 	}
 
+	k8sclient, err := config.NewK8sClientset()
+	if err != nil {
+		logger().Errorf("NewK8sClientset: %s", err)
+		return nil, err
+	}
+
 	return &Fluent{
-		Checker:        cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
+		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
 		Env:            env,
 		DeploymentName: deploymentName,
 		LogBucketName:  logBucketName,
 		Awscfg:         config.NewAwsConfig(),
-	}
+	}, nil
 }
 
 func (f *Fluent) Check() error {

@@ -24,7 +24,7 @@ type ClusterAutoscaler struct {
 	ReplicaCount   int
 }
 
-func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *ClusterAutoscaler {
+func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*ClusterAutoscaler, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cluster-autoscaler-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
@@ -38,10 +38,16 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 		deploymentName = v
 	}
 
-	return &ClusterAutoscaler{
-		Checker:        cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
-		DeploymentName: deploymentName,
+	k8sclient, err := config.NewK8sClientset()
+	if err != nil {
+		logger().Errorf("NewK8sClientset: %s", err)
+		return nil, err
 	}
+
+	return &ClusterAutoscaler{
+		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		DeploymentName: deploymentName,
+	}, nil
 }
 
 // Check is check cluster-autoscaler
