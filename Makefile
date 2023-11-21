@@ -23,7 +23,7 @@ lint:
 .PHONY: lint
 
 test:
-	go test -v ./...
+	go test -timeout 4m -v ./...
 .PHONY: test
 
 goreleaser-snapshot:
