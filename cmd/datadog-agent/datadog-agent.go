@@ -10,10 +10,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/cw-sakamoto/kibertas/cmd"
-	"github.com/cw-sakamoto/kibertas/config"
-	"github.com/cw-sakamoto/kibertas/util"
-	"github.com/cw-sakamoto/kibertas/util/notify"
+	"github.com/chatwork/kibertas/cmd"
+	"github.com/chatwork/kibertas/config"
+	"github.com/chatwork/kibertas/util"
+	"github.com/chatwork/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadog"

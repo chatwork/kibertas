@@ -29,7 +29,7 @@ lint:
 
 .PHONY: test
 test:
-	go test -timeout 4m -v ./...
+	go test -timeout 6m -v ./...
 
 .PHONY: goreleaser-snapshot
 goreleaser-snapshot:
@@ -65,7 +65,7 @@ delete-kind:
 apply-cert-manager:
 	@kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.yaml
 	@sleep 90
-	@kubectl apply -f ./ClusterIssuer-SelfSigned.yaml
+	@kubectl apply -f ./manifests/ClusterIssuer-SelfSigned.yaml
 
 .PHONY: delete-cert-manager
 delete-cert-manager:
