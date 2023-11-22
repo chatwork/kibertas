@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.21.3'
-          cache: true
+          check-latest: true
       - name: Creat kind
         run: make create-kind
       - name: Apply Cert Manager
