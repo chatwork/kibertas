@@ -20,6 +20,8 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 type Fluent struct {
@@ -75,6 +77,11 @@ func (f *Fluent) Check() error {
 	if err := f.createResources(); err != nil {
 		return err
 	}
+	defer func() {
+		if err := f.cleanUpResources(); err != nil {
+			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
+	}()
 
 	if err := f.checkS3Object(); err != nil {
 		return err
@@ -82,6 +89,23 @@ func (f *Fluent) Check() error {
 
 	f.Chatwork.AddMessage("fluent check finished\n")
 	return nil
+}
+
+func (f *Fluent) cleanUpResources() error {
+	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
+	var result *multierror.Error
+	var err error
+
+	if err = k.DeleteDeployment(f.DeploymentName); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteNamespace(); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
 }
 
 func (f *Fluent) createResources() error {
@@ -94,21 +118,12 @@ func (f *Fluent) createResources() error {
 		f.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteNamespace(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprint("Error Delete Namespace:", err))
-		}
-	}()
 
-	if err := k.CreateDeployment(createDeploymentObject(f.DeploymentName)); err != nil {
+	if err := k.CreateDeployment(f.createDeploymentObject()); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteDeployment(f.DeploymentName); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprint("Error Delete Deployment:", err))
-		}
-	}()
+
 	return nil
 }
 
@@ -158,24 +173,24 @@ func (f *Fluent) checkS3Object() error {
 	return nil
 }
 
-func createDeploymentObject(deploymentName string) *appsv1.Deployment {
+func (f *Fluent) createDeploymentObject() *appsv1.Deployment {
 	desireReplicacount := 2
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: deploymentName,
+			Name: f.DeploymentName,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: util.Int32Ptr(int32(desireReplicacount)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": deploymentName,
+					"app": f.DeploymentName,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": deploymentName,
+						"app": f.DeploymentName,
 					},
 				},
 				Spec: apiv1.PodSpec{
@@ -205,7 +220,7 @@ func createDeploymentObject(deploymentName string) *appsv1.Deployment {
 											{
 												Key:      "app",
 												Operator: metav1.LabelSelectorOpIn,
-												Values:   []string{deploymentName},
+												Values:   []string{f.DeploymentName},
 											},
 										},
 									},
