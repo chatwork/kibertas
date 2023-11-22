@@ -30,10 +30,8 @@ type DatadogAgent struct {
 func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*DatadogAgent, error) {
 	t := time.Now()
 
+	// dummy namespace
 	namespace := fmt.Sprintf("datadog-agent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-
-	logger().Infof("datadog-agent check application namespace: %s", namespace)
-	chatwork.AddMessage(fmt.Sprintf("datadog-agent check application namespace: %s\n", namespace))
 
 	apiKey := ""
 	appKey := ""
