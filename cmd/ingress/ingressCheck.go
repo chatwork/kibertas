@@ -20,15 +20,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 type Ingress struct {
 	*cmd.Checker
+	NoDnsCheck       bool
+	IngressClassName string
 	ResourceName     string
 	ExternalHostname string
 }
 
-func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *Ingress {
+func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork, noDnsCheck bool, ingressClassName string) *Ingress {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
@@ -47,6 +51,8 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 
 	return &Ingress{
 		Checker:          cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
+		NoDnsCheck:       noDnsCheck,
+		IngressClassName: ingressClassName,
 		ResourceName:     resourceName,
 		ExternalHostname: externalHostName,
 	}
@@ -59,13 +65,49 @@ func (i *Ingress) Check() error {
 	if err := i.createResources(); err != nil {
 		return err
 	}
+	defer func() {
+		if err := i.cleanUpResources(); err != nil {
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
+	}()
 
-	if err := i.checkDNSRecord(); err != nil {
-		return err
+	if i.NoDnsCheck {
+		i.Chatwork.AddMessage("Skip Dns Check\n")
+		i.Logger().Info("Skip Dns Check")
+	} else {
+		if err := i.checkDNSRecord(); err != nil {
+			return err
+		}
 	}
 
 	i.Chatwork.AddMessage("ingress check finished\n")
 	return nil
+}
+
+func (i *Ingress) cleanUpResources() error {
+	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
+	var result *multierror.Error
+	var err error
+	if err = k.DeleteIngress(i.ResourceName); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteService(i.ResourceName); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteDeployment(i.ResourceName); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteNamespace(); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
 }
 
 func (i *Ingress) createResources() error {
@@ -75,62 +117,40 @@ func (i *Ingress) createResources() error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: i.Namespace,
 		}}); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteNamespace(); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
-		}
-	}()
-
-	if err := k.CreateDeployment(createDeploymentObject(i.ResourceName)); err != nil {
+	if err := k.CreateDeployment(i.createDeploymentObject()); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteDeployment(i.ResourceName); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
-		}
-	}()
-
-	if err := k.CreateService(createServiceObject(i.ResourceName)); err != nil {
+	if err := k.CreateService(i.createServiceObject()); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteService(i.ResourceName); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s", err))
-		}
-	}()
-
-	if err := k.CreateIngress(createIngressObject(i.ResourceName, i.ExternalHostname)); err != nil {
+	if err := k.CreateIngress(i.createIngressObject()); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteIngress(i.ResourceName); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s", err))
-		}
-	}()
 	return nil
 }
 
-func createDeploymentObject(deploymentName string) *appsv1.Deployment {
+func (i *Ingress) createDeploymentObject() *appsv1.Deployment {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: deploymentName,
+			Name: i.ResourceName,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: util.Int32Ptr(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": deploymentName,
+					"app": i.ResourceName,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": deploymentName,
+						"app": i.ResourceName,
 					},
 				},
 				Spec: apiv1.PodSpec{
@@ -155,14 +175,14 @@ func createDeploymentObject(deploymentName string) *appsv1.Deployment {
 	return deployment
 }
 
-func createServiceObject(serviceName string) *apiv1.Service {
+func (i *Ingress) createServiceObject() *apiv1.Service {
 	service := &apiv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: serviceName,
+			Name: i.ResourceName,
 		},
 		Spec: apiv1.ServiceSpec{
 			Selector: map[string]string{
-				"app": serviceName,
+				"app": i.ResourceName,
 			},
 			Ports: []apiv1.ServicePort{
 				{
@@ -176,14 +196,13 @@ func createServiceObject(serviceName string) *apiv1.Service {
 	return service
 }
 
-func createIngressObject(ingressName string, externalHostname string) *networkingv1.Ingress {
+func (i *Ingress) createIngressObject() *networkingv1.Ingress {
 	var pathPrefix networkingv1.PathType = networkingv1.PathTypeImplementationSpecific
-	ingressClassName := "alb"
-	serviceName := ingressName
+	serviceName := i.ResourceName
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ingressName,
+			Name: i.ResourceName,
 			Annotations: map[string]string{
 				"alb.ingress.kubernetes.io/backend-protocol":             "HTTP",
 				"alb.ingress.kubernetes.io/connection-idle-timeout":      "60",
@@ -193,14 +212,14 @@ func createIngressObject(ingressName string, externalHostname string) *networkin
 				"alb.ingress.kubernetes.io/healthy-threshold-count":      "2",
 				"alb.ingress.kubernetes.io/inbound-cidrs":                "0.0.0.0/0",
 				"alb.ingress.kubernetes.io/target-type":                  "ip",
-				"external-dns.alpha.kubernetes.io/hostname":              externalHostname,
+				"external-dns.alpha.kubernetes.io/hostname":              i.ExternalHostname,
 			},
 		},
 		Spec: networkingv1.IngressSpec{
-			IngressClassName: &ingressClassName,
+			IngressClassName: &i.IngressClassName,
 			Rules: []networkingv1.IngressRule{
 				{
-					Host: externalHostname,
+					Host: i.ExternalHostname,
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{
 							Paths: []networkingv1.HTTPIngressPath{

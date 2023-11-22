@@ -37,6 +37,8 @@ import (
 func main() {
 	var debug bool
 	var logLevel string
+	var ingressClassName string
+	var noDnsCheck bool
 	var logger func() *logrus.Entry
 	var chatwork *notify.Chatwork
 	var rootCmd = &cobra.Command{
@@ -65,10 +67,10 @@ func main() {
 
 	var cmdIngress = &cobra.Command{
 		Use:   "ingress",
-		Short: "test ingress(aws-load-balancer-controller, external-dns)",
-		Long:  "test ingress(aws-load-balancer-controller, external-dns))",
+		Short: "test ingress",
+		Long:  "test ingress(ingress-controller, external-dns)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return ingress.NewIngress(debug, logger, chatwork).Check()
+			return ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName).Check()
 		},
 	}
 
@@ -99,33 +101,35 @@ func main() {
 		},
 	}
 
-	var cmdAll = &cobra.Command{
-		Use:   "all",
-		Short: "test all application",
-		Long:  "test all application",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			logger().Info("test all application")
-			err := ingress.NewIngress(debug, logger, chatwork).Check()
-			if err != nil {
-				return err
-			}
-			err = clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork).Check()
-			if err != nil {
-				return err
-			}
+	/*
+		var cmdAll = &cobra.Command{
+			Use:   "all",
+			Short: "test all application",
+			Long:  "test all application",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				logger().Info("test all application")
+				err := ingress.NewIngress(debug, logger, chatwork).Check()
+				if err != nil {
+					return err
+				}
+				err = clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork).Check()
+				if err != nil {
+					return err
+				}
 
-			err = certmanager.NewCertManager(debug, logger, chatwork).Check()
-			if err != nil {
-				return err
-			}
+				err = certmanager.NewCertManager(debug, logger, chatwork).Check()
+				if err != nil {
+					return err
+				}
 
-			err = fluent.NewFluent(debug, logger, chatwork).Check()
-			if err != nil {
-				return err
-			}
-			return nil
-		},
-	}
+				err = fluent.NewFluent(debug, logger, chatwork).Check()
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+		}
+	*/
 
 	rootCmd.AddCommand(cmdTest)
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
@@ -138,12 +142,15 @@ func main() {
 
 	chatwork = initChatwork(logger)
 
-	cmdTest.AddCommand(cmdAll)
+	//cmdTest.AddCommand(cmdAll)
 	cmdTest.AddCommand(cmdFluent)
 	cmdTest.AddCommand(cmdClusterAutoscaler)
 	cmdTest.AddCommand(cmdIngress)
 	cmdTest.AddCommand(cmdCertManager)
 	cmdTest.AddCommand(cmdDatadogAgent)
+
+	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
+	cmdIngress.Flags().StringVar(&ingressClassName, "ingress-class-name", "alb", "This is a flag for the ingress class name. If you want to change the ingress class name, please specify the name.(default: alb)")
 
 	if err := rootCmd.Execute(); err != nil {
 		logger().Fatal("error: ", err)
