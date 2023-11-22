@@ -25,6 +25,7 @@ type DatadogAgent struct {
 	ApiKey      string
 	AppKey      string
 	ClusterName string
+	WaitTime    time.Duration
 }
 
 func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*DatadogAgent, error) {
@@ -58,6 +59,7 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 		ApiKey:      apiKey,
 		AppKey:      appKey,
 		ClusterName: clusterName,
+		WaitTime:    3 * 60 * time.Second,
 	}, nil
 }
 
@@ -102,7 +104,7 @@ func (d *DatadogAgent) checkMetrics() error {
 	query := fmt.Sprintf("avg:kubernetes.cpu.user.total{env:%s}", d.ClusterName)
 
 	d.Logger().Info("Waiting metrics...")
-	time.Sleep((60 * 3) * time.Second)
+	time.Sleep(d.WaitTime)
 
 	d.Logger().Infof("Querying metrics with query: %s", query)
 	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s", query))

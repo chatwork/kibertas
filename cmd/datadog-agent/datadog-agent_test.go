@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
@@ -42,6 +43,7 @@ func TestCheck(t *testing.T) {
 		ApiKey:      "",
 		AppKey:      "",
 		ClusterName: "",
+		WaitTime:    1 * time.Second,
 	}
 
 	err = datadogAgent.Check()
