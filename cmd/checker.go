@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/cw-sakamoto/kibertas/util/notify"
+	"github.com/chatwork/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )

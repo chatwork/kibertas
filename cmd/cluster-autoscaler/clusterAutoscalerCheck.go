@@ -10,11 +10,11 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/cw-sakamoto/kibertas/cmd"
-	"github.com/cw-sakamoto/kibertas/config"
-	"github.com/cw-sakamoto/kibertas/util"
-	"github.com/cw-sakamoto/kibertas/util/k8s"
-	"github.com/cw-sakamoto/kibertas/util/notify"
+	"github.com/chatwork/kibertas/cmd"
+	"github.com/chatwork/kibertas/config"
+	"github.com/chatwork/kibertas/util"
+	"github.com/chatwork/kibertas/util/k8s"
+	"github.com/chatwork/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 )
 

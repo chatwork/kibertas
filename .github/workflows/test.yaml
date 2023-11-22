@@ -23,6 +23,8 @@ jobs:
           cache: true
       - name: Creat kind
         run: make create-kind
+      - name: Apply Cert Manager
+        run: make apply-cert-manager
       - name: Run tests
         run: make test
   golangci:

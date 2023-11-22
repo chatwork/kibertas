@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cw-sakamoto/kibertas/cmd"
-	"github.com/cw-sakamoto/kibertas/config"
-	"github.com/cw-sakamoto/kibertas/util/notify"
+	"github.com/chatwork/kibertas/cmd"
+	"github.com/chatwork/kibertas/config"
+	"github.com/chatwork/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 )
 

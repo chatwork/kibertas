@@ -24,12 +24,12 @@ import (
 	"strconv"
 	"strings"
 
-	certmanager "github.com/cw-sakamoto/kibertas/cmd/cert-manager"
-	clusterautoscaler "github.com/cw-sakamoto/kibertas/cmd/cluster-autoscaler"
-	datadogagent "github.com/cw-sakamoto/kibertas/cmd/datadog-agent"
-	"github.com/cw-sakamoto/kibertas/cmd/fluent"
-	"github.com/cw-sakamoto/kibertas/cmd/ingress"
-	"github.com/cw-sakamoto/kibertas/util/notify"
+	certmanager "github.com/chatwork/kibertas/cmd/cert-manager"
+	clusterautoscaler "github.com/chatwork/kibertas/cmd/cluster-autoscaler"
+	datadogagent "github.com/chatwork/kibertas/cmd/datadog-agent"
+	"github.com/chatwork/kibertas/cmd/fluent"
+	"github.com/chatwork/kibertas/cmd/ingress"
+	"github.com/chatwork/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
