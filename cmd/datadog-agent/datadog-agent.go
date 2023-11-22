@@ -27,13 +27,11 @@ type DatadogAgent struct {
 	ClusterName string
 }
 
-func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *DatadogAgent {
+func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*DatadogAgent, error) {
 	t := time.Now()
 
+	// dummy namespace
 	namespace := fmt.Sprintf("datadog-agent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-
-	logger().Infof("datadog-agent check application namespace: %s", namespace)
-	chatwork.AddMessage(fmt.Sprintf("datadog-agent check application namespace: %s\n", namespace))
 
 	apiKey := ""
 	appKey := ""
@@ -48,12 +46,19 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	if v := os.Getenv("CLUSTER_NAME"); v != "" {
 		clusterName = v
 	}
+
+	k8sclient, err := config.NewK8sClientset()
+	if err != nil {
+		logger().Errorf("NewK8sClientset: %s", err)
+		return nil, err
+	}
+
 	return &DatadogAgent{
-		Checker:     cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
+		Checker:     cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
 		ApiKey:      apiKey,
 		AppKey:      appKey,
 		ClusterName: clusterName,
-	}
+	}, nil
 }
 
 func (d *DatadogAgent) Check() error {

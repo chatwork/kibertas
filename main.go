@@ -61,7 +61,11 @@ func main() {
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork).Check()
+			ca, err := clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork)
+			if err != nil {
+				return err
+			}
+			return ca.Check()
 		},
 	}
 
@@ -70,7 +74,11 @@ func main() {
 		Short: "test ingress",
 		Long:  "test ingress(ingress-controller, external-dns)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName).Check()
+			i, err := ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName)
+			if err != nil {
+				return err
+			}
+			return i.Check()
 		},
 	}
 
@@ -79,7 +87,11 @@ func main() {
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fluent.NewFluent(debug, logger, chatwork).Check()
+			f, err := fluent.NewFluent(debug, logger, chatwork)
+			if err != nil {
+				return err
+			}
+			return f.Check()
 		},
 	}
 
@@ -88,7 +100,11 @@ func main() {
 		Short: "test datadog-agent",
 		Long:  "test datadog-agent",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return datadogagent.NewDatadogAgent(debug, logger, chatwork).Check()
+			da, err := datadogagent.NewDatadogAgent(debug, logger, chatwork)
+			if err != nil {
+				return err
+			}
+			return da.Check()
 		},
 	}
 
@@ -97,7 +113,11 @@ func main() {
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return certmanager.NewCertManager(debug, logger, chatwork).Check()
+			cm, err := certmanager.NewCertManager(debug, logger, chatwork)
+			if err != nil {
+				return err
+			}
+			return cm.Check()
 		},
 	}
 
@@ -108,21 +128,42 @@ func main() {
 			Long:  "test all application",
 			RunE: func(cmd *cobra.Command, args []string) error {
 				logger().Info("test all application")
-				err := ingress.NewIngress(debug, logger, chatwork).Check()
-				if err != nil {
-					return err
-				}
-				err = clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork).Check()
+				i, err := ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName)
 				if err != nil {
 					return err
 				}
 
-				err = certmanager.NewCertManager(debug, logger, chatwork).Check()
+				err = i.Check()
 				if err != nil {
 					return err
 				}
 
-				err = fluent.NewFluent(debug, logger, chatwork).Check()
+				ca, err := clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork)
+				if err != nil {
+					return err
+				}
+
+				err = ca.Check()
+				if err != nil {
+					return err
+				}
+
+				cm, err := certmanager.NewCertManager(debug, logger, chatwork)
+				if err != nil {
+					return err
+				}
+
+				err = cm.Check()
+				if err != nil {
+					return err
+				}
+
+				f, err := fluent.NewFluent(debug, logger, chatwork)
+				if err != nil {
+					return err
+				}
+
+				err = f.Check()
 				if err != nil {
 					return err
 				}

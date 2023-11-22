@@ -35,7 +35,7 @@ type certificates struct {
 	certificate *cmapiv1.Certificate
 }
 
-func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) *CertManager {
+func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*CertManager, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
@@ -50,11 +50,23 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 	scheme := runtime.NewScheme()
 	_ = cmapiv1.AddToScheme(scheme)
 
-	return &CertManager{
-		Checker:  cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
-		CertName: certName,
-		Client:   config.NewK8sClient(client.Options{Scheme: scheme}),
+	k8sclientset, err := config.NewK8sClientset()
+	if err != nil {
+		logger().Errorf("NewK8sClientset: %s", err)
+		return nil, err
 	}
+
+	k8sclient, err := config.NewK8sClient(client.Options{Scheme: scheme})
+	if err != nil {
+		logger().Errorf("NewK8sClient: %s", err)
+		return nil, err
+	}
+
+	return &CertManager{
+		Checker:  cmd.NewChecker(namespace, k8sclientset, debug, logger, chatwork),
+		CertName: certName,
+		Client:   k8sclient,
+	}, nil
 }
 
 func (c *CertManager) Check() error {

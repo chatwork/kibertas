@@ -32,7 +32,7 @@ type Ingress struct {
 	ExternalHostname string
 }
 
-func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork, noDnsCheck bool, ingressClassName string) *Ingress {
+func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork, noDnsCheck bool, ingressClassName string) (*Ingress, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
@@ -49,13 +49,19 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 		externalHostName = v
 	}
 
+	k8sclient, err := config.NewK8sClientset()
+	if err != nil {
+		logger().Errorf("NewK8sClientset: %s", err)
+		return nil, err
+	}
+
 	return &Ingress{
-		Checker:          cmd.NewChecker(namespace, config.NewK8sClientset(), debug, logger, chatwork),
+		Checker:          cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		ResourceName:     resourceName,
 		NoDnsCheck:       noDnsCheck,
 		IngressClassName: ingressClassName,
-		ResourceName:     resourceName,
 		ExternalHostname: externalHostName,
-	}
+	}, nil
 }
 
 func (i *Ingress) Check() error {

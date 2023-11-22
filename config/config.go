@@ -14,28 +14,32 @@ import (
 func NewAwsConfig() aws.Config {
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
+		log.Printf("unable to load SDK config: %v", err)
 	}
 	return cfg
 }
 
-func NewK8sClientset() *kubernetes.Clientset {
-	config := ctrl.GetConfigOrDie()
+func NewK8sClientset() (*kubernetes.Clientset, error) {
+	config, err := ctrl.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatal("error kubernetes NewForConfig: ", err)
-		panic(err)
+		log.Printf("error kubernetes NewForConfig: %v", err)
+		return nil, err
 	}
-	return clientset
+	return clientset, nil
 }
 
-func NewK8sClient(options client.Options) client.Client {
+func NewK8sClient(options client.Options) (client.Client, error) {
 	config := ctrl.GetConfigOrDie()
 	c, err := client.New(config, options)
 
 	if err != nil {
-		log.Fatal("error kubernetes client: ", err)
-		panic(err)
+		log.Printf("error kubernetes client: %v", err)
+		return nil, err
 	}
-	return c
+	return c, nil
 }

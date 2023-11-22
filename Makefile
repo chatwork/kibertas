@@ -29,7 +29,7 @@ lint:
 
 .PHONY: test
 test:
-	go test -v ./...
+	go test -timeout 4m -v ./...
 
 .PHONY: goreleaser-snapshot
 goreleaser-snapshot:
@@ -37,12 +37,12 @@ goreleaser-snapshot:
 
 .PHONY: create-kind
 create-kind:
-	#@mkdir -p .bin/
-	#@if [ ! -f " ./.bin/kind" ]; then \
+	@mkdir -p .bin/
+	@if [ ! -f " ./.bin/kind" ]; then \
 	    curl -sSL -o ./.bin/kind https://github.com/kubernetes-sigs/kind/releases/download/v$(KIND_VERSION)/kind-linux-amd64; \
 	    chmod +x ./.bin/kind; \
 	fi
-	#@sudo cp ./.bin/kind /usr/local/bin/kind;
+	@sudo cp ./.bin/kind /usr/local/bin/kind;
 
 	#@if [ ! -f "./.bin/kubectl" ]; then \
 	#    curl -sSL -o ./.bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v$(KUBERNETES_VERSION)/bin/linux/amd64/kubectl; \
