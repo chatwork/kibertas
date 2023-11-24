@@ -2,6 +2,7 @@ KIND_VERSION = 0.20.0
 KUBERNETES_VERSION = 1.27.3
 KIND_NODE_HASH = 3966ac761ae0136263ffdb6cfd4db23ef8a83cba8a463690e98317add2c9ba72
 CERT_MANAGER_VERSION = 1.13.2
+INGRESS_NGINX_VERSION = 1.9.4
 
 GOLANGCI_LINT_VERSION=1.55.1
 TAG  ?= $(shell git describe --tags --abbrev=0 HEAD || echo dev)
@@ -37,6 +38,10 @@ goreleaser-snapshot:
 
 .PHONY: create-kind
 create-kind:
+	kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m;
+
+.PHONY: ci\:enable\:k8s
+ci\:enable\:k8s:
 	@mkdir -p .bin/
 	@if [ ! -f " ./.bin/kind" ]; then \
 	    curl -sSL -o ./.bin/kind https://github.com/kubernetes-sigs/kind/releases/download/v$(KIND_VERSION)/kind-linux-amd64; \
@@ -44,11 +49,11 @@ create-kind:
 	fi
 	@sudo cp ./.bin/kind /usr/local/bin/kind;
 
-	#@if [ ! -f "./.bin/kubectl" ]; then \
-	#    curl -sSL -o ./.bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v$(KUBERNETES_VERSION)/bin/linux/amd64/kubectl; \
-	#    chmod +x ./.bin/kubectl; \
-	#fi
-	#@sudo cp ./.bin/kubectl /usr/local/bin/kubectl;
+	@if [ ! -f "./.bin/kubectl" ]; then \
+	    curl -sSL -o ./.bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v$(KUBERNETES_VERSION)/bin/linux/amd64/kubectl; \
+	    chmod +x ./.bin/kubectl; \
+	fi
+	@sudo cp ./.bin/kubectl /usr/local/bin/kubectl;
 	kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m;
 
 .PHONY: delete-kind
@@ -61,13 +66,23 @@ delete-kind:
 	#@sudo cp ./.bin/kind /usr/local/bin/kind;
 	kind delete cluster
 
+.PHONY: apply-ingress-nginx
+apply-ingress-nginx:
+	@kubectl apply --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
+	@sleep 2
+	@kubectl -n ingress-nginx wait deploy -l app.kubernetes.io/instance=ingress-nginx --for=condition=available --timeout=60s
+
+.PHONY: delete-ingress-nginx
+delete-ingress-nginx:
+	@kubectl delete --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
+
 .PHONY: apply-cert-manager
 apply-cert-manager:
-	@kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.yaml
-	@sleep 90
+	@kubectl apply --wait=true -f https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.yaml
+	@sleep 2
+	@kubectl -n cert-manager wait deploy -l app.kubernetes.io/instance=cert-manager --for=condition=available --timeout=60s
 	@kubectl apply -f ./manifests/ClusterIssuer-SelfSigned.yaml
 
 .PHONY: delete-cert-manager
 delete-cert-manager:
-	@kubectl delete -f ./ClusterIssuer-SelfSigned.yaml
 	@kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.yaml
