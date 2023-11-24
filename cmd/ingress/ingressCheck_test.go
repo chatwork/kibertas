@@ -1,16 +1,20 @@
 package ingress
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
+	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/notify"
 
 	"github.com/sirupsen/logrus"
 )
 
 func TestNewIngress(t *testing.T) {
+	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -26,6 +30,7 @@ func TestNewIngress(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
+	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -37,10 +42,14 @@ func TestCheck(t *testing.T) {
 
 	chatwork := &notify.Chatwork{ApiToken: "token", RoomId: "test", Logger: logger}
 
+	now := time.Now()
+
+	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", now.Year(), now.Month(), now.Day(), util.GenerateRandomString(5))
+
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
 	ingress := &Ingress{
-		Checker:          cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		Checker:          cmd.NewChecker(namespace, k8sclient, true, logger, chatwork),
 		NoDnsCheck:       true,
 		IngressClassName: "nginx",
 		ResourceName:     "sample",

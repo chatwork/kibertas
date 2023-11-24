@@ -1,9 +1,12 @@
 package certmanager
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	cmapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/notify"
 	"github.com/sirupsen/logrus"
 
@@ -15,6 +18,7 @@ import (
 )
 
 func TestNewCertManager(t *testing.T) {
+	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -30,6 +34,7 @@ func TestNewCertManager(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
+	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -49,8 +54,10 @@ func TestCheck(t *testing.T) {
 
 	chatwork := &notify.Chatwork{ApiToken: "token", RoomId: "test", Logger: logger}
 
+	now := time.Now()
+	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", now.Year(), now.Month(), now.Day(), util.GenerateRandomString(5))
 	cm := &CertManager{
-		Checker:  cmd.NewChecker("test", k8sclientset, true, logger, chatwork),
+		Checker:  cmd.NewChecker(namespace, k8sclientset, true, logger, chatwork),
 		CertName: "sample",
 		Client:   k8sclient,
 	}

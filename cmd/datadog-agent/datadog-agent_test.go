@@ -13,6 +13,7 @@ import (
 )
 
 func TestNewDatadogAgent(t *testing.T) {
+	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -28,6 +29,7 @@ func TestNewDatadogAgent(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
+	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
