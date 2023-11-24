@@ -69,9 +69,13 @@ func TestCheck(t *testing.T) {
 	}
 
 	os.Setenv("CLUSTER_NAME", "test")
-	datadogAgent, err = NewDatadogAgent(true, logger, chatwork)
-	if err != nil {
-		t.Fatalf("NewDatadogAgent: %s", err)
+
+	datadogAgent = &DatadogAgent{
+		Checker:     cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		ApiKey:      "test",
+		AppKey:      "test",
+		ClusterName: "test",
+		WaitTime:    1 * time.Second,
 	}
 
 	err = datadogAgent.Check()
