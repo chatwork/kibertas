@@ -151,7 +151,7 @@ func (k *K8s) DeleteService(serviceName string) error {
 	return nil
 }
 
-func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, NoAddressCheck bool) error {
+func (k *K8s) CreateIngress(ingress *networkingv1.Ingress) error {
 	ingressClient := k.clientset.NetworkingV1().Ingresses(k.namespace)
 
 	k.logger().Infof("Creating ingress: %s", ingress.Name)
@@ -168,7 +168,7 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, NoAddressCheck bool) 
 		return err
 	}
 
-	if !NoAddressCheck {
+	if *ingress.Spec.IngressClassName == "alb" {
 		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
 			ingress, err := ingressClient.Get(ctx, ingress.Name, metav1.GetOptions{})
 			if err != nil {
