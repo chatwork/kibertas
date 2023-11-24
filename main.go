@@ -175,7 +175,10 @@ func main() {
 	rootCmd.AddCommand(cmdTest)
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
-	logger = initLogger(logLevel)
+	logger, err := initLogger(logLevel)
+	if err != nil {
+		panic(err)
+	}
 	if debug {
 		logger().Debug("debug mode enabled")
 	}
@@ -207,13 +210,14 @@ func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {
 	return chatwork
 }
 
-func initLogger(logLevel string) func() *logrus.Entry {
+func initLogger(logLevel string) (func() *logrus.Entry, error) {
 	logr := logrus.New()
 	logr.SetFormatter(&logrus.JSONFormatter{})
 	level, err := logrus.ParseLevel(logLevel)
 
 	if err != nil {
-		logr.Fatal("invalid log level: ", err)
+		logr.Infof("invalid log level: %v", err)
+		return nil, err
 	}
 
 	logr.SetLevel(level)
@@ -221,7 +225,8 @@ func initLogger(logLevel string) func() *logrus.Entry {
 	return func() *logrus.Entry {
 		_, file, line, ok := runtime.Caller(1)
 		if !ok {
-			panic("Could not get context info for logger!")
+			logr.Warn("Could not get context info for logger!")
+			return logr.WithField("file", "unknown")
 		}
 
 		filename := file[strings.LastIndex(file, "/")+1:] + ":" + strconv.Itoa(line)
@@ -230,5 +235,5 @@ func initLogger(logLevel string) func() *logrus.Entry {
 		//fn := funcname[lastSlashIndex+1:]
 		//return logr.WithField("file", filename).WithField("function", fn)
 		return logr.WithField("file", filename)
-	}
+	}, nil
 }
