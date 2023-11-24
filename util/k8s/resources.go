@@ -168,27 +168,28 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress) error {
 		return err
 	}
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
-		ingress, err := ingressClient.Get(ctx, ingress.Name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-
-		for _, address := range ingress.Status.LoadBalancer.Ingress {
-			if address.Hostname != "" {
-				k.logger().Infof("Ingress is now available at Hostname: %s", address.Hostname)
-				return true, nil
+	if *ingress.Spec.IngressClassName == "alb" {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+			ingress, err := ingressClient.Get(ctx, ingress.Name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
 			}
+
+			for _, address := range ingress.Status.LoadBalancer.Ingress {
+				if address.Hostname != "" {
+					k.logger().Infof("Ingress is now available at Hostname: %s", address.Hostname)
+					return true, nil
+				}
+			}
+			k.logger().Infoln("Ingress is not yet available, retrying...")
+			return false, nil
+		})
+
+		if err != nil {
+			k.logger().Error("Timed out waiting for ingress to be ready:", err)
+			return err
 		}
-		k.logger().Infoln("Ingress is not yet available, retrying...")
-		return false, nil
-	})
-
-	if err != nil {
-		k.logger().Error("Timed out waiting for ingress to be ready:", err)
-		return err
 	}
-
 	return nil
 }
 
