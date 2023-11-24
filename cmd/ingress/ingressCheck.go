@@ -134,7 +134,7 @@ func (i *Ingress) createResources() error {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
 		return err
 	}
-	if err := k.CreateIngress(i.createIngressObject()); err != nil {
+	if err := k.CreateIngress(i.createIngressObject(), i.NoDnsCheck); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
 		return err
 	}
