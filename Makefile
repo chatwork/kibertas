@@ -32,9 +32,12 @@ lint:
 test:
 	go test -timeout 6m -v ./...
 
+# This will produce following images for testing locally:
+# - examplecom/kibertas:canary-arm64
+# - examplecom/kibertas:canary-amd64
 .PHONY: goreleaser-snapshot
 goreleaser-snapshot:
-	curl -sfL https://goreleaser.com/static/run | bash -s -- --release --clean --snapshot
+	curl -sfL https://goreleaser.com/static/run | REGISTRY=examplecom bash -s -- --clean --snapshot
 
 .PHONY: create-kind
 create-kind:
