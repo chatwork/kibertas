@@ -27,44 +27,32 @@ dockers:
     goarch: amd64
     image_templates:
       - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-amd64"
+      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Version }}-amd64"
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.version=v{{.Version}}"
   - use: buildx
     goos: linux
     goarch: arm64
     image_templates:
       - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary-arm64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}-arm64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-arm64"
+      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Version }}-arm64"
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.version=v{{.Version}}"
 
 docker_manifests:
   - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary"
     image_templates:
       - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary-amd64"
       - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary-arm64"
-  - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Version }}"
+  - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Version }}"
     image_templates:
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Version }}-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Version }}-arm64"
-  - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}"
-    image_templates:
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}-arm64"
-  - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}"
-    image_templates:
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-arm64"
+      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Version }}-amd64"
+      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Version }}-arm64"
