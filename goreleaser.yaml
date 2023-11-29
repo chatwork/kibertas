@@ -48,10 +48,6 @@ dockers:
       - "--label=org.opencontainers.image.version=v{{.Version}}"
 
 docker_manifests:
-  - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Major }}"
-    image_templates:
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Major }}-amd64"
-      - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:v{{ .Major }}-arm64"
   - name_template: "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary"
     image_templates:
       - "{{ .Env.REGISTRY }}/{{ .ProjectName }}:canary-amd64"
