@@ -2,7 +2,6 @@ package datadogagent
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -41,11 +40,11 @@ func TestCheck(t *testing.T) {
 
 	chatwork := &notify.Chatwork{ApiToken: "token", RoomId: "test", Logger: logger}
 	datadogAgent := &DatadogAgent{
-		Checker:     cmd.NewChecker("test", k8sclient, true, logger, chatwork),
-		ApiKey:      "",
-		AppKey:      "",
-		ClusterName: "",
-		WaitTime:    1 * time.Second,
+		Checker:      cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		ApiKey:       "",
+		AppKey:       "",
+		QueryMetrics: "",
+		WaitTime:     1 * time.Second,
 	}
 
 	err = datadogAgent.Check()
@@ -58,26 +57,12 @@ func TestCheck(t *testing.T) {
 		t.Errorf("Expected '%s', got '%s'", expectedError.Error(), err.Error())
 	}
 
-	os.Setenv("DD_API_KEY", "test")
-	os.Setenv("DD_APP_KEY", "test")
-	datadogAgent, err = NewDatadogAgent(true, logger, chatwork)
-	if err != nil {
-		t.Fatalf("NewDatadogAgent: %s", err)
-	}
-	err = datadogAgent.Check()
-	expectedError = errors.New("CLUSTER_NAME is empty")
-	if err.Error() != expectedError.Error() {
-		t.Errorf("Expected '%s', got '%s'", expectedError.Error(), err.Error())
-	}
-
-	os.Setenv("CLUSTER_NAME", "test")
-
 	datadogAgent = &DatadogAgent{
-		Checker:     cmd.NewChecker("test", k8sclient, true, logger, chatwork),
-		ApiKey:      "test",
-		AppKey:      "test",
-		ClusterName: "test",
-		WaitTime:    1 * time.Second,
+		Checker:      cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		ApiKey:       "test",
+		AppKey:       "test",
+		QueryMetrics: "avg:kubernetes.cpu.user.total",
+		WaitTime:     1 * time.Second,
 	}
 
 	err = datadogAgent.Check()
