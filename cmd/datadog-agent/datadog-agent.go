@@ -22,10 +22,10 @@ import (
 
 type DatadogAgent struct {
 	*cmd.Checker
-	ApiKey      string
-	AppKey      string
-	ClusterName string
-	WaitTime    time.Duration
+	ApiKey       string
+	AppKey       string
+	QueryMetrics string
+	WaitTime     time.Duration
 }
 
 func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*DatadogAgent, error) {
@@ -36,7 +36,7 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 
 	apiKey := ""
 	appKey := ""
-	clusterName := ""
+	queryMetrics := ""
 
 	if v := os.Getenv("DD_API_KEY"); v != "" {
 		apiKey = v
@@ -44,8 +44,10 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	if v := os.Getenv("DD_APP_KEY"); v != "" {
 		appKey = v
 	}
-	if v := os.Getenv("CLUSTER_NAME"); v != "" {
-		clusterName = v
+
+	queryMetrics = "avg:kubernetes.cpu.user.total"
+	if v := os.Getenv("QUERY_METRICS"); v != "" {
+		queryMetrics = v
 	}
 
 	k8sclient, err := config.NewK8sClientset()
@@ -55,11 +57,11 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	}
 
 	return &DatadogAgent{
-		Checker:     cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
-		ApiKey:      apiKey,
-		AppKey:      appKey,
-		ClusterName: clusterName,
-		WaitTime:    3 * 60 * time.Second,
+		Checker:      cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		ApiKey:       apiKey,
+		AppKey:       appKey,
+		QueryMetrics: queryMetrics,
+		WaitTime:     3 * 60 * time.Second,
 	}, nil
 }
 
@@ -71,12 +73,6 @@ func (d *DatadogAgent) Check() error {
 		d.Chatwork.AddMessage("DD_API_KEY or DD_APP_KEY is empty\n")
 		return errors.New("DD_API_KEY or DD_APP_KEY is empty")
 	}
-	if d.ClusterName == "" {
-		d.Logger().Error("CLUSTER_NAME is empty")
-		d.Chatwork.AddMessage("CLUSTER_NAME is empty\n")
-		return errors.New("CLUSTER_NAME is empty")
-	}
-
 	d.Chatwork.AddMessage("datadog-agent check start\n")
 
 	if err := d.checkMetrics(); err != nil {
@@ -101,17 +97,16 @@ func (d *DatadogAgent) checkMetrics() error {
 	configuration := datadog.NewConfiguration()
 	apiClient := datadog.NewAPIClient(configuration)
 	api := datadogV1.NewMetricsApi(apiClient)
-	query := fmt.Sprintf("avg:kubernetes.cpu.user.total{env:%s}", d.ClusterName)
 
 	d.Logger().Info("Waiting metrics...")
 	time.Sleep(d.WaitTime)
 
-	d.Logger().Infof("Querying metrics with query: %s", query)
-	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s", query))
+	d.Logger().Infof("Querying metrics with query: %s", d.QueryMetrics)
+	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s", d.QueryMetrics))
 	now := time.Now().Unix()
 	from := now - 60*2
 	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
-		resp, r, err := api.QueryMetrics(ddctx, from, now, query)
+		resp, r, err := api.QueryMetrics(ddctx, from, now, d.QueryMetrics)
 
 		if err != nil {
 			if r != nil && r.StatusCode == 403 {

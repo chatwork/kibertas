@@ -165,6 +165,7 @@ func (f *Fluent) checkS3Object() error {
 
 	if err != nil {
 		f.Logger().Error("Timed out waiting for output S3 Object:", err)
+		f.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for output S3 Object: %s\n", err))
 		return err
 	}
 
