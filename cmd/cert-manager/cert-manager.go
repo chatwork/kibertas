@@ -87,6 +87,9 @@ func (c *CertManager) Check() error {
 	cert := c.createCertificateObject()
 
 	if err := c.createResources(cert); err != nil {
+		if err := c.cleanUpResources(cert); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
 		return err
 	}
 	defer func() {
@@ -231,7 +234,7 @@ func (c *CertManager) createCert(cert certificates) error {
 
 	secretClient := c.Clientset.CoreV1().Secrets(c.Namespace)
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.rootCA.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready", cert.rootCA.Spec.SecretName)
@@ -262,7 +265,7 @@ func (c *CertManager) createCert(cert certificates) error {
 		return err
 	}
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.certificate.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", cert.certificate.Spec.SecretName)

@@ -102,6 +102,9 @@ func (f *Fluent) Check() error {
 	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d", f.DeploymentName, f.ReplicaCount))
 
 	if err := f.createResources(); err != nil {
+		if err := f.cleanUpResources(); err != nil {
+			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
 		return err
 	}
 	defer func() {
@@ -146,7 +149,7 @@ func (f *Fluent) createResources() error {
 		return err
 	}
 
-	if err := k.CreateDeployment(f.createDeploymentObject()); err != nil {
+	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
 		return err
 	}

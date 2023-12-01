@@ -116,7 +116,7 @@ func (d *DatadogAgent) checkMetrics() error {
 	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s", d.QueryMetrics))
 	now := time.Now().Unix()
 	from := now - 60*2
-	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, d.Timeout, true, func(ctx context.Context) (bool, error) {
 		resp, r, err := api.QueryMetrics(ddctx, from, now, d.QueryMetrics)
 
 		if err != nil {

@@ -60,7 +60,7 @@ func (k *K8s) DeleteNamespace() error {
 	return nil
 }
 
-func (k *K8s) CreateDeployment(deployment *appsv1.Deployment) error {
+func (k *K8s) CreateDeployment(deployment *appsv1.Deployment, timeout time.Duration) error {
 	deploymentsClient := k.clientset.AppsV1().Deployments(k.namespace)
 
 	// Create Deployment
@@ -79,7 +79,7 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment) error {
 
 	k.logger().Infof("Created Deployment %s", result.GetObjectMeta().GetName())
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		deployment, err := deploymentsClient.Get(ctx, deployment.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -151,7 +151,7 @@ func (k *K8s) DeleteService(serviceName string) error {
 	return nil
 }
 
-func (k *K8s) CreateIngress(ingress *networkingv1.Ingress) error {
+func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, timeout time.Duration) error {
 	ingressClient := k.clientset.NetworkingV1().Ingresses(k.namespace)
 
 	k.logger().Infof("Creating ingress: %s", ingress.Name)
@@ -169,7 +169,7 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress) error {
 	}
 
 	if *ingress.Spec.IngressClassName == "alb" {
-		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 			ingress, err := ingressClient.Get(ctx, ingress.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err

@@ -16,6 +16,7 @@ import (
 	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/k8s"
 	"github.com/chatwork/kibertas/util/notify"
+	"github.com/hashicorp/go-multierror"
 	"github.com/sirupsen/logrus"
 )
 
@@ -83,9 +84,34 @@ func (c *ClusterAutoscaler) Check() error {
 	c.Chatwork.AddMessage(fmt.Sprintf("spot nodes: %d\n", len(nodes.Items)))
 
 	if err := c.createResources(); err != nil {
+		if err := c.cleanUpResources(); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
 		return err
 	}
+	defer func() {
+		if err := c.cleanUpResources(); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
+	}()
+
 	return nil
+}
+
+func (c *ClusterAutoscaler) cleanUpResources() error {
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+	var result *multierror.Error
+	var err error
+	if err = k.DeleteDeployment(c.DeploymentName); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteNamespace(); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
 }
 
 func (c *ClusterAutoscaler) createResources() error {
@@ -98,22 +124,13 @@ func (c *ClusterAutoscaler) createResources() error {
 		c.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteNamespace(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprint("Error Delete Namespace:", err))
-		}
-	}()
 
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
-	if err := k.CreateDeployment(c.createDeploymentObject()); err != nil {
+	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
 		return err
 	}
-	defer func() {
-		if err := k.DeleteDeployment(c.DeploymentName); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprint("Error Delete Deployment:", err))
-		}
-	}()
+
 	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
 
 	return nil

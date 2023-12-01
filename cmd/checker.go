@@ -18,6 +18,7 @@ type Checker struct {
 }
 
 func NewChecker(namespace string, clientset *kubernetes.Clientset, debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork, timeout time.Duration) *Checker {
+	logger().Info("Checker timeout: ", timeout)
 	return &Checker{
 		Namespace: namespace,
 		Clientset: clientset,
