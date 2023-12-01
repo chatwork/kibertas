@@ -30,6 +30,7 @@ type Ingress struct {
 	IngressClassName string
 	ResourceName     string
 	ExternalHostname string
+	Timeout          time.Duration
 }
 
 func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork, noDnsCheck bool, ingressClassName string) (*Ingress, error) {
@@ -41,6 +42,7 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
+	timeout := 20
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
@@ -56,7 +58,7 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 	}
 
 	return &Ingress{
-		Checker:          cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		Checker:          cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		ResourceName:     resourceName,
 		NoDnsCheck:       noDnsCheck,
 		IngressClassName: ingressClassName,

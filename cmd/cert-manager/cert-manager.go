@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	cmapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -43,12 +44,22 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 	chatwork.AddMessage(fmt.Sprintf("cert-manager check application namespace: %s\n", namespace))
 
 	certName := "sample"
+	timeout := 20
 
 	if v := os.Getenv("CERT_NAME"); v != "" {
 		certName = v
 	}
 	scheme := runtime.NewScheme()
 	_ = cmapiv1.AddToScheme(scheme)
+
+	var err error
+	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+		timeout, err = strconv.Atoi(v)
+		if err != nil {
+			logger().Errorf("strconv.Atoi: %s", err)
+			return nil, err
+		}
+	}
 
 	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {
@@ -63,7 +74,7 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 	}
 
 	return &CertManager{
-		Checker:  cmd.NewChecker(namespace, k8sclientset, debug, logger, chatwork),
+		Checker:  cmd.NewChecker(namespace, k8sclientset, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		CertName: certName,
 		Client:   k8sclient,
 	}, nil

@@ -31,7 +31,6 @@ type Fluent struct {
 	LogBucketName  string
 	DeploymentName string
 	ReplicaCount   int
-	Timeout        time.Duration
 	Awscfg         aws.Config
 }
 
@@ -75,11 +74,10 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 	}
 
 	return &Fluent{
-		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		Env:            env,
 		DeploymentName: deploymentName,
 		LogBucketName:  logBucketName,
-		Timeout:        time.Duration(timeout) * time.Minute,
 		Awscfg:         config.NewAwsConfig(),
 	}, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -33,9 +34,19 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 	chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
 
 	deploymentName := "sample-for-scale"
+	timeout := 20
 
 	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
 		deploymentName = v
+	}
+
+	var err error
+	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+		timeout, err = strconv.Atoi(v)
+		if err != nil {
+			logger().Errorf("strconv.Atoi: %s", err)
+			return nil, err
+		}
 	}
 
 	k8sclient, err := config.NewK8sClientset()
@@ -45,7 +56,7 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 	}
 
 	return &ClusterAutoscaler{
-		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		DeploymentName: deploymentName,
 	}, nil
 }
