@@ -40,7 +40,7 @@ func TestCheck(t *testing.T) {
 
 	chatwork := &notify.Chatwork{ApiToken: "token", RoomId: "test", Logger: logger}
 	datadogAgent := &DatadogAgent{
-		Checker:      cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		Checker:      cmd.NewChecker("test", k8sclient, true, logger, chatwork, 1*time.Minute),
 		ApiKey:       "",
 		AppKey:       "",
 		QueryMetrics: "",
@@ -58,7 +58,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	datadogAgent = &DatadogAgent{
-		Checker:      cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		Checker:      cmd.NewChecker("test", k8sclient, true, logger, chatwork, 3*time.Minute),
 		ApiKey:       "test",
 		AppKey:       "test",
 		QueryMetrics: "avg:kubernetes.cpu.user.total",

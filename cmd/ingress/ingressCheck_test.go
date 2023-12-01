@@ -49,7 +49,7 @@ func TestCheck(t *testing.T) {
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
 	ingress := &Ingress{
-		Checker:          cmd.NewChecker(namespace, k8sclient, true, logger, chatwork),
+		Checker:          cmd.NewChecker(namespace, k8sclient, true, logger, chatwork, 1*time.Minute),
 		NoDnsCheck:       true,
 		IngressClassName: "nginx",
 		ResourceName:     "sample",
@@ -77,7 +77,7 @@ func TestCheckDNSRecord(t *testing.T) {
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
 	ingress := &Ingress{
-		Checker:          cmd.NewChecker("test", k8sclient, true, logger, chatwork),
+		Checker:          cmd.NewChecker("test", k8sclient, true, logger, chatwork, 1*time.Minute),
 		NoDnsCheck:       true,
 		IngressClassName: "nginx",
 		ResourceName:     "sample",

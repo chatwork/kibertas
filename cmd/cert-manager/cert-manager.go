@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	cmapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -43,12 +44,22 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 	chatwork.AddMessage(fmt.Sprintf("cert-manager check application namespace: %s\n", namespace))
 
 	certName := "sample"
+	timeout := 20
 
 	if v := os.Getenv("CERT_NAME"); v != "" {
 		certName = v
 	}
 	scheme := runtime.NewScheme()
 	_ = cmapiv1.AddToScheme(scheme)
+
+	var err error
+	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+		timeout, err = strconv.Atoi(v)
+		if err != nil {
+			logger().Errorf("strconv.Atoi: %s", err)
+			return nil, err
+		}
+	}
 
 	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {
@@ -63,7 +74,7 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 	}
 
 	return &CertManager{
-		Checker:  cmd.NewChecker(namespace, k8sclientset, debug, logger, chatwork),
+		Checker:  cmd.NewChecker(namespace, k8sclientset, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		CertName: certName,
 		Client:   k8sclient,
 	}, nil
@@ -76,6 +87,9 @@ func (c *CertManager) Check() error {
 	cert := c.createCertificateObject()
 
 	if err := c.createResources(cert); err != nil {
+		if err := c.cleanUpResources(cert); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
 		return err
 	}
 	defer func() {
@@ -220,7 +234,7 @@ func (c *CertManager) createCert(cert certificates) error {
 
 	secretClient := c.Clientset.CoreV1().Secrets(c.Namespace)
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.rootCA.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready", cert.rootCA.Spec.SecretName)
@@ -251,7 +265,7 @@ func (c *CertManager) createCert(cert certificates) error {
 		return err
 	}
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.certificate.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", cert.certificate.Spec.SecretName)

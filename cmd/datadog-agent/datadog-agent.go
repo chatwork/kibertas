@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -37,12 +38,22 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	apiKey := ""
 	appKey := ""
 	queryMetrics := ""
+	timeout := 10
 
 	if v := os.Getenv("DD_API_KEY"); v != "" {
 		apiKey = v
 	}
 	if v := os.Getenv("DD_APP_KEY"); v != "" {
 		appKey = v
+	}
+
+	var err error
+	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+		timeout, err = strconv.Atoi(v)
+		if err != nil {
+			logger().Errorf("strconv.Atoi: %s", err)
+			return nil, err
+		}
 	}
 
 	queryMetrics = "avg:kubernetes.cpu.user.total"
@@ -57,7 +68,7 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	}
 
 	return &DatadogAgent{
-		Checker:      cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork),
+		Checker:      cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		ApiKey:       apiKey,
 		AppKey:       appKey,
 		QueryMetrics: queryMetrics,
@@ -105,7 +116,7 @@ func (d *DatadogAgent) checkMetrics() error {
 	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s", d.QueryMetrics))
 	now := time.Now().Unix()
 	from := now - 60*2
-	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, d.Timeout, true, func(ctx context.Context) (bool, error) {
 		resp, r, err := api.QueryMetrics(ddctx, from, now, d.QueryMetrics)
 
 		if err != nil {
