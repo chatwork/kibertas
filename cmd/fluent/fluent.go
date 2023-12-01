@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
@@ -29,6 +30,8 @@ type Fluent struct {
 	Env            string
 	LogBucketName  string
 	DeploymentName string
+	ReplicaCount   int
+	Timeout        time.Duration
 	Awscfg         aws.Config
 }
 
@@ -42,6 +45,7 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 	deploymentName := "burst-log-generator"
 	env := "cwtest"
 	logBucketName := "cwtest-kubernetes-logs"
+	timeout := 20
 
 	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
 		deploymentName = v
@@ -55,6 +59,15 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 		logBucketName = v
 	}
 
+	var err error
+	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+		timeout, err = strconv.Atoi(v)
+		if err != nil {
+			logger().Errorf("strconv.Atoi: %s", err)
+			return nil, err
+		}
+	}
+
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
 		logger().Errorf("NewK8sClientset: %s", err)
@@ -66,6 +79,7 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 		Env:            env,
 		DeploymentName: deploymentName,
 		LogBucketName:  logBucketName,
+		Timeout:        time.Duration(timeout) * time.Minute,
 		Awscfg:         config.NewAwsConfig(),
 	}, nil
 }
@@ -73,6 +87,21 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 func (f *Fluent) Check() error {
 	f.Chatwork.AddMessage("fluent check start\n")
 	defer f.Chatwork.Send()
+
+	nodeListOption := metav1.ListOptions{
+		LabelSelector: "eks.amazonaws.com/capacityType=SPOT",
+	}
+
+	nodes, err := f.Clientset.CoreV1().Nodes().List(context.TODO(), nodeListOption)
+	if err != nil {
+		f.Logger().Errorf("Error List Nodes: %s", err)
+		f.Chatwork.AddMessage(fmt.Sprintf("Error List Nodes: %s\n", err))
+		return err
+	}
+
+	f.ReplicaCount = (len(nodes.Items) / 3) + 1
+	f.Logger().Infof("%s replica counts: %d", f.DeploymentName, f.ReplicaCount)
+	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d", f.DeploymentName, f.ReplicaCount))
 
 	if err := f.createResources(); err != nil {
 		return err
@@ -138,7 +167,7 @@ func (f *Fluent) checkS3Object() error {
 		Prefix: aws.String(targetPrefix),
 	}
 
-	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 20*time.Minute, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, f.Timeout, false, func(ctx context.Context) (bool, error) {
 		f.Logger().Infof("Wait fluentd output to s3://%s/%s ...", targetBucket, targetPrefix)
 
 		result, err := client.ListObjectsV2(context.TODO(), input)
@@ -175,7 +204,7 @@ func (f *Fluent) checkS3Object() error {
 }
 
 func (f *Fluent) createDeploymentObject() *appsv1.Deployment {
-	desireReplicacount := 2
+	desireReplicacount := f.ReplicaCount
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -197,31 +226,33 @@ func (f *Fluent) createDeploymentObject() *appsv1.Deployment {
 				Spec: apiv1.PodSpec{
 					Affinity: &apiv1.Affinity{
 						PodAntiAffinity: &apiv1.PodAntiAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: []apiv1.PodAffinityTerm{
+							PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.WeightedPodAffinityTerm{
 								{
-									TopologyKey: "kubernetes.io/hostname",
-									LabelSelector: &metav1.LabelSelector{
-										MatchExpressions: []metav1.LabelSelectorRequirement{
-											{
-												Key:      "app.kubernetes.io/instance",
-												Operator: metav1.LabelSelectorOpIn,
-												Values:   []string{"fluentd"},
+									Weight: 10,
+									PodAffinityTerm: apiv1.PodAffinityTerm{
+										TopologyKey: "kubernetes.io/hostname",
+										LabelSelector: &metav1.LabelSelector{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
+												{
+													Key:      "app.kubernetes.io/instance",
+													Operator: metav1.LabelSelectorOpIn,
+													Values:   []string{"fluentd"},
+												},
 											},
 										},
 									},
 								},
-							},
-						},
-						PodAffinity: &apiv1.PodAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: []apiv1.PodAffinityTerm{
 								{
-									TopologyKey: "kubernetes.io/hostname",
-									LabelSelector: &metav1.LabelSelector{
-										MatchExpressions: []metav1.LabelSelectorRequirement{
-											{
-												Key:      "app",
-												Operator: metav1.LabelSelectorOpIn,
-												Values:   []string{f.DeploymentName},
+									Weight: 1,
+									PodAffinityTerm: apiv1.PodAffinityTerm{
+										TopologyKey: "kubernetes.io/hostname",
+										LabelSelector: &metav1.LabelSelector{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
+												{
+													Key:      "app",
+													Operator: metav1.LabelSelectorOpIn,
+													Values:   []string{f.DeploymentName},
+												},
 											},
 										},
 									},
