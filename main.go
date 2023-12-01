@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	certmanager "github.com/chatwork/kibertas/cmd/cert-manager"
 	clusterautoscaler "github.com/chatwork/kibertas/cmd/cluster-autoscaler"
@@ -206,7 +207,9 @@ func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {
 	roomId := os.Getenv("CHATWORK_ROOM_ID")
 	clusterName := os.Getenv("CLUSTER_NAME")
 	chatwork := notify.NewChatwork(apiToken, roomId, logger)
-	chatwork.AddMessage(fmt.Sprintf("kibertas start in %s\n", clusterName))
+	location, _ := time.LoadLocation("Asia/Tokyo")
+
+	chatwork.AddMessage(fmt.Sprintf("kibertas start in %s at %s\n", clusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
 	return chatwork
 }
 
