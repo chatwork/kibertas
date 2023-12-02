@@ -88,13 +88,13 @@ func (c *CertManager) Check() error {
 
 	if err := c.createResources(cert); err != nil {
 		if err := c.cleanUpResources(cert); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		return err
 	}
 	defer func() {
 		if err := c.cleanUpResources(cert); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -131,7 +131,7 @@ func (c *CertManager) cleanUpResources(cert certificates) error {
 	}
 
 	if err = k.DeleteNamespace(); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
@@ -145,13 +145,13 @@ func (c *CertManager) createResources(cert certificates) error {
 			Name: c.Namespace,
 		}}); err != nil {
 		c.Logger().Error("Error create namespace:", err)
-		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error create namespace: %s\n", err))
 		return err
 	}
 
 	if err := c.createCert(cert); err != nil {
 		c.Logger().Error("Error create certificate:", err)
-		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error create certificate: %s\n", err))
 		return err
 	}
 	return nil
@@ -245,7 +245,7 @@ func (c *CertManager) createCert(cert certificates) error {
 	})
 	if err != nil {
 		c.Logger().Error("Timed out waiting for RootCA secret to be ready:", err)
-		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for RootCA secret to be ready: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for RootCA secret to be ready: %s\n", err))
 		return err
 	}
 
@@ -276,7 +276,7 @@ func (c *CertManager) createCert(cert certificates) error {
 	})
 	if err != nil {
 		c.Logger().Error("Timed out waiting for Certificate secret to be ready:", err)
-		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for Certificate secret to be ready: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for Certificate secret to be ready: %s\n", err))
 		return err
 	}
 
