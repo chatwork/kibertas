@@ -81,7 +81,7 @@ func (i *Ingress) Check(ctx context.Context) error {
 		i.Logger().Info("Received Ctrl+C. Exiting...")
 		i.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
 		if err := i.cleanUpResources(); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		i.Chatwork.Send()
 		os.Exit(0)
@@ -91,7 +91,7 @@ func (i *Ingress) Check(ctx context.Context) error {
 
 	defer func() {
 		if err := i.cleanUpResources(); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -112,34 +112,8 @@ func (i *Ingress) Check(ctx context.Context) error {
 	return nil
 }
 
-func (i *Ingress) cleanUpResources() error {
-	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
-	var result *multierror.Error
-	var err error
-	if err = k.DeleteIngress(i.ResourceName); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s", err))
-		result = multierror.Append(result, err)
-	}
-
-	if err = k.DeleteService(i.ResourceName); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s", err))
-		result = multierror.Append(result, err)
-	}
-
-	if err = k.DeleteDeployment(i.ResourceName); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
-		result = multierror.Append(result, err)
-	}
-
-	if err = k.DeleteNamespace(); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
-		result = multierror.Append(result, err)
-	}
-	return result.ErrorOrNil()
-}
-
 func (i *Ingress) createResources() error {
-	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
+	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -161,6 +135,37 @@ func (i *Ingress) createResources() error {
 		return err
 	}
 	return nil
+}
+
+func (i *Ingress) cleanUpResources() error {
+	if i.Debug {
+		i.Logger().Info("Skip Delete Resources")
+		i.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Logger)
+	var result *multierror.Error
+	var err error
+	if err = k.DeleteIngress(i.ResourceName); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s\n", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteService(i.ResourceName); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s\n", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteDeployment(i.ResourceName); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s\n", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteNamespace(); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
 }
 
 func (i *Ingress) createDeploymentObject() *appsv1.Deployment {

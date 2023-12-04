@@ -110,7 +110,7 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 
 	defer func() {
 		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -120,8 +120,35 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 	return nil
 }
 
+func (c *ClusterAutoscaler) createResources() error {
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: c.Namespace,
+		}}); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
+		return err
+	}
+
+	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
+	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
+		return err
+	}
+
+	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
+
+	return nil
+}
+
 func (c *ClusterAutoscaler) cleanUpResources() error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+	if c.Debug {
+		c.Logger().Info("Skip Delete Resources")
+		c.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 	var result *multierror.Error
 	var err error
 	if err = k.DeleteDeployment(c.DeploymentName); err != nil {
@@ -134,28 +161,6 @@ func (c *ClusterAutoscaler) cleanUpResources() error {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
-}
-
-func (c *ClusterAutoscaler) createResources() error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
-
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: c.Namespace,
-		}}); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
-		return err
-	}
-
-	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
-	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
-		return err
-	}
-
-	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
-
-	return nil
 }
 
 func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {

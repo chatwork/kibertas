@@ -110,11 +110,11 @@ func (f *Fluent) Check(ctx context.Context) error {
 
 	f.ReplicaCount = (len(nodes.Items) / 3) + 1
 	f.Logger().Infof("%s replica counts: %d", f.DeploymentName, f.ReplicaCount)
-	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d", f.DeploymentName, f.ReplicaCount))
+	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d\n", f.DeploymentName, f.ReplicaCount))
 
 	defer func() {
 		if err := f.cleanUpResources(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -130,8 +130,32 @@ func (f *Fluent) Check(ctx context.Context) error {
 	return nil
 }
 
+func (f *Fluent) createResources() error {
+	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: f.Namespace,
+		}}); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
+		return err
+	}
+
+	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
+		return err
+	}
+
+	return nil
+}
+
 func (f *Fluent) cleanUpResources() error {
-	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
+	if f.Debug {
+		f.Logger().Info("Skip Delete Resources")
+		f.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
 	var result *multierror.Error
 	var err error
 
@@ -145,25 +169,6 @@ func (f *Fluent) cleanUpResources() error {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
-}
-
-func (f *Fluent) createResources() error {
-	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
-
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: f.Namespace,
-		}}); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
-		return err
-	}
-
-	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
-		return err
-	}
-
-	return nil
 }
 
 func (f *Fluent) checkS3Object() error {

@@ -88,7 +88,7 @@ func (c *CertManager) Check(ctx context.Context) error {
 		c.Logger().Info("Received Ctrl+C. Exiting...")
 		c.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
 		if err := c.cleanUpResources(cert); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		c.Chatwork.Send()
 		os.Exit(0)
@@ -99,7 +99,7 @@ func (c *CertManager) Check(ctx context.Context) error {
 
 	defer func() {
 		if err := c.cleanUpResources(cert); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 	if err := c.createResources(cert); err != nil {
@@ -110,10 +110,35 @@ func (c *CertManager) Check(ctx context.Context) error {
 	return nil
 }
 
+func (c *CertManager) createResources(cert certificates) error {
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: c.Namespace,
+		}}); err != nil {
+		c.Logger().Error("Error create namespace:", err)
+		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
+		return err
+	}
+
+	if err := c.createCert(cert); err != nil {
+		c.Logger().Error("Error create certificate:", err)
+		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
+		return err
+	}
+	return nil
+}
+
 // cleanUpResources deletes the certificate, issuer, rootCA, and namespace associated with the given certificate.
 // It returns an error if any deletion operation fails.
 func (c *CertManager) cleanUpResources(cert certificates) error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+	if c.Debug {
+		c.Logger().Info("Skip Delete Resources")
+		c.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 	var result *multierror.Error
 	var err error
 
@@ -139,30 +164,10 @@ func (c *CertManager) cleanUpResources(cert certificates) error {
 	}
 
 	if err = k.DeleteNamespace(); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
-}
-
-func (c *CertManager) createResources(cert certificates) error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
-
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: c.Namespace,
-		}}); err != nil {
-		c.Logger().Error("Error create namespace:", err)
-		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
-		return err
-	}
-
-	if err := c.createCert(cert); err != nil {
-		c.Logger().Error("Error create certificate:", err)
-		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
-		return err
-	}
-	return nil
 }
 
 func (c *CertManager) createCertificateObject() certificates {
@@ -253,7 +258,7 @@ func (c *CertManager) createCert(cert certificates) error {
 	})
 	if err != nil {
 		c.Logger().Error("Timed out waiting for RootCA secret to be ready:", err)
-		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for RootCA secret to be ready: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for RootCA secret to be ready: %s\n", err))
 		return err
 	}
 
@@ -284,7 +289,7 @@ func (c *CertManager) createCert(cert certificates) error {
 	})
 	if err != nil {
 		c.Logger().Error("Timed out waiting for Certificate secret to be ready:", err)
-		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for Certificate secret to be ready: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for Certificate secret to be ready: %s\n", err))
 		return err
 	}
 

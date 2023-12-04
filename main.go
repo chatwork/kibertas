@@ -179,7 +179,7 @@ func main() {
 	rootCmd.AddCommand(cmdTest)
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
-	logger, err := initLogger(logLevel)
+	logger, err := initLogger(logLevel, debug)
 	if err != nil {
 		panic(err)
 	}
@@ -242,9 +242,10 @@ func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {
 	return chatwork
 }
 
-func initLogger(logLevel string) (func() *logrus.Entry, error) {
+func initLogger(logLevel string, debug bool) (func() *logrus.Entry, error) {
 	logr := logrus.New()
 	logr.SetFormatter(&logrus.JSONFormatter{})
+
 	level, err := logrus.ParseLevel(logLevel)
 
 	if err != nil {
@@ -252,7 +253,11 @@ func initLogger(logLevel string) (func() *logrus.Entry, error) {
 		return nil, err
 	}
 
-	logr.SetLevel(level)
+	if debug {
+		logr.SetLevel(logrus.DebugLevel)
+	} else {
+		logr.SetLevel(level)
+	}
 
 	return func() *logrus.Entry {
 		_, file, line, ok := runtime.Caller(1)
