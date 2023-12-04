@@ -1,6 +1,7 @@
 package certmanager
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestCheck(t *testing.T) {
 		Client:   k8sclient,
 	}
 
-	err = cm.Check()
+	err = cm.Check(context.TODO())
 	if err != nil {
 		t.Fatalf("Expected No Error, but got error: %s", err)
 	}

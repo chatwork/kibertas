@@ -80,23 +80,31 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 	}, nil
 }
 
-func (c *CertManager) Check() error {
-	c.Chatwork.AddMessage("cert-manager check start\n")
-	defer c.Chatwork.Send()
-
+func (c *CertManager) Check(ctx context.Context) error {
 	cert := c.createCertificateObject()
 
-	if err := c.createResources(cert); err != nil {
+	go func() {
+		<-ctx.Done()
+		c.Logger().Info("Received Ctrl+C. Exiting...")
+		c.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
 		if err := c.cleanUpResources(cert); err != nil {
 			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
 		}
-		return err
-	}
+		c.Chatwork.Send()
+		os.Exit(0)
+	}()
+
+	c.Chatwork.AddMessage("cert-manager check start\n")
+	defer c.Chatwork.Send()
+
 	defer func() {
 		if err := c.cleanUpResources(cert); err != nil {
 			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
 		}
 	}()
+	if err := c.createResources(cert); err != nil {
+		return err
+	}
 
 	c.Chatwork.AddMessage("cert-manager check finished\n")
 	return nil

@@ -78,7 +78,18 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 
 // Check is check cluster-autoscaler
 // replicaをノード数+1でdeploymentを作成する
-func (c *ClusterAutoscaler) Check() error {
+func (c *ClusterAutoscaler) Check(ctx context.Context) error {
+	go func() {
+		<-ctx.Done()
+		c.Logger().Info("Received Ctrl+C. Exiting...")
+		c.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
+		if err := c.cleanUpResources(); err != nil {
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
+		c.Chatwork.Send()
+		os.Exit(0)
+	}()
+
 	c.Chatwork.AddMessage("cluster-autoscaler check start\n")
 	defer c.Chatwork.Send()
 
@@ -97,18 +108,15 @@ func (c *ClusterAutoscaler) Check() error {
 	c.Logger().Infof("Nodes(have label: %s=%s): %d", c.NodeLabelKey, c.NodeLabelValue, len(nodes.Items))
 	c.Chatwork.AddMessage(fmt.Sprintf("Nodes(have label: %s=%s): %d\n", c.NodeLabelKey, c.NodeLabelValue, len(nodes.Items)))
 
-	if err := c.createResources(); err != nil {
-		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
-		}
-		return err
-	}
 	defer func() {
 		if err := c.cleanUpResources(); err != nil {
 			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
 		}
 	}()
 
+	if err := c.createResources(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -75,21 +75,29 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 	}, nil
 }
 
-func (i *Ingress) Check() error {
-	i.Chatwork.AddMessage("ingress check start\n")
-	defer i.Chatwork.Send()
-
-	if err := i.createResources(); err != nil {
+func (i *Ingress) Check(ctx context.Context) error {
+	go func() {
+		<-ctx.Done()
+		i.Logger().Info("Received Ctrl+C. Exiting...")
+		i.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
 		if err := i.cleanUpResources(); err != nil {
 			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
 		}
-		return err
-	}
+		i.Chatwork.Send()
+		os.Exit(0)
+	}()
+	i.Chatwork.AddMessage("ingress check start\n")
+	defer i.Chatwork.Send()
+
 	defer func() {
 		if err := i.cleanUpResources(); err != nil {
 			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
 		}
 	}()
+
+	if err := i.createResources(); err != nil {
+		return err
+	}
 
 	if i.NoDnsCheck {
 		i.Chatwork.AddMessage("Skip Dns Check\n")

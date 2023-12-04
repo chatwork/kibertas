@@ -18,11 +18,14 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	certmanager "github.com/chatwork/kibertas/cmd/cert-manager"
@@ -61,39 +64,39 @@ func main() {
 		Use:   "cluster-autoscaler",
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: runE(func(ctx context.Context) error {
 			ca, err := clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork)
 			if err != nil {
 				return err
 			}
-			return ca.Check()
-		},
+			return ca.Check(ctx)
+		}),
 	}
 
 	var cmdIngress = &cobra.Command{
 		Use:   "ingress",
 		Short: "test ingress",
 		Long:  "test ingress(ingress-controller, external-dns)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: runE(func(ctx context.Context) error {
 			i, err := ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName)
 			if err != nil {
 				return err
 			}
-			return i.Check()
-		},
+			return i.Check(ctx)
+		}),
 	}
 
 	var cmdFluent = &cobra.Command{
 		Use:   "fluent",
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: runE(func(ctx context.Context) error {
 			f, err := fluent.NewFluent(debug, logger, chatwork)
 			if err != nil {
 				return err
 			}
-			return f.Check()
-		},
+			return f.Check(ctx)
+		}),
 	}
 
 	var cmdDatadogAgent = &cobra.Command{
@@ -113,13 +116,13 @@ func main() {
 		Use:   "cert-manager",
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: runE(func(ctx context.Context) error {
 			cm, err := certmanager.NewCertManager(debug, logger, chatwork)
 			if err != nil {
 				return err
 			}
-			return cm.Check()
-		},
+			return cm.Check(ctx)
+		}),
 	}
 
 	/*
@@ -197,8 +200,34 @@ func main() {
 	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
 	cmdIngress.Flags().StringVar(&ingressClassName, "ingress-class-name", "alb", "This is a flag for the ingress class name. If you want to change the ingress class name, please specify the name.(default: alb)")
 
-	if err := rootCmd.Execute(); err != nil {
+	ctx := newSignalContext()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		logger().Fatal("error: ", err)
+	}
+}
+
+func newSignalContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		cancel()
+	}()
+
+	return ctx
+}
+
+func runE(fn func(context.Context) error) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := fn(cmd.Context()); err != nil {
+			logrus.Error(err)
+			return err
+		}
+
+		return nil
 	}
 }
 

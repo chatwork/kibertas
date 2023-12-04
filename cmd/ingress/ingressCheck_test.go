@@ -1,6 +1,7 @@
 package ingress
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -56,7 +57,7 @@ func TestCheck(t *testing.T) {
 		ExternalHostname: "sample.example.com",
 	}
 
-	err = ingress.Check()
+	err = ingress.Check(context.TODO())
 	if err != nil {
 		t.Fatalf("Expected No Error, but got error: %s", err)
 	}

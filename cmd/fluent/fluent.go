@@ -82,7 +82,18 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 	}, nil
 }
 
-func (f *Fluent) Check() error {
+func (f *Fluent) Check(ctx context.Context) error {
+	go func() {
+		<-ctx.Done()
+		f.Logger().Info("Received Ctrl+C. Exiting...")
+		f.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
+		if err := f.cleanUpResources(); err != nil {
+			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+		}
+		f.Chatwork.Send()
+		os.Exit(0)
+	}()
+
 	f.Chatwork.AddMessage("fluent check start\n")
 	defer f.Chatwork.Send()
 
@@ -101,17 +112,15 @@ func (f *Fluent) Check() error {
 	f.Logger().Infof("%s replica counts: %d", f.DeploymentName, f.ReplicaCount)
 	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d", f.DeploymentName, f.ReplicaCount))
 
-	if err := f.createResources(); err != nil {
-		if err := f.cleanUpResources(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
-		}
-		return err
-	}
 	defer func() {
 		if err := f.cleanUpResources(); err != nil {
 			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
 		}
 	}()
+
+	if err := f.createResources(); err != nil {
+		return err
+	}
 
 	if err := f.checkS3Object(); err != nil {
 		return err
