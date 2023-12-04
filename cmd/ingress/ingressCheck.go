@@ -104,8 +104,38 @@ func (i *Ingress) Check() error {
 	return nil
 }
 
+func (i *Ingress) createResources() error {
+	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: i.Namespace,
+		}}); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
+		return err
+	}
+	if err := k.CreateDeployment(i.createDeploymentObject(), i.Timeout); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
+		return err
+	}
+	if err := k.CreateService(i.createServiceObject()); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
+		return err
+	}
+	if err := k.CreateIngress(i.createIngressObject(), i.Timeout); err != nil {
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
+		return err
+	}
+	return nil
+}
+
 func (i *Ingress) cleanUpResources() error {
-	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
+	if i.Debug {
+		i.Logger().Info("Skip Delete Resources")
+		i.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Logger)
 	var result *multierror.Error
 	var err error
 	if err = k.DeleteIngress(i.ResourceName); err != nil {
@@ -128,31 +158,6 @@ func (i *Ingress) cleanUpResources() error {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
-}
-
-func (i *Ingress) createResources() error {
-	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Debug, i.Logger)
-
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: i.Namespace,
-		}}); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
-		return err
-	}
-	if err := k.CreateDeployment(i.createDeploymentObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
-		return err
-	}
-	if err := k.CreateService(i.createServiceObject()); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s\n", err))
-		return err
-	}
-	if err := k.CreateIngress(i.createIngressObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s\n", err))
-		return err
-	}
-	return nil
 }
 
 func (i *Ingress) createDeploymentObject() *appsv1.Deployment {

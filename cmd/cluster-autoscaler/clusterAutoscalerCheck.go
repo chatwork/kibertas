@@ -112,24 +112,8 @@ func (c *ClusterAutoscaler) Check() error {
 	return nil
 }
 
-func (c *ClusterAutoscaler) cleanUpResources() error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
-	var result *multierror.Error
-	var err error
-	if err = k.DeleteDeployment(c.DeploymentName); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s\n", err))
-		result = multierror.Append(result, err)
-	}
-
-	if err = k.DeleteNamespace(); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
-		result = multierror.Append(result, err)
-	}
-	return result.ErrorOrNil()
-}
-
 func (c *ClusterAutoscaler) createResources() error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -148,6 +132,27 @@ func (c *ClusterAutoscaler) createResources() error {
 	c.Chatwork.AddMessage("cluster-autoscaler check finished\n")
 
 	return nil
+}
+
+func (c *ClusterAutoscaler) cleanUpResources() error {
+	if c.Debug {
+		c.Logger().Info("Skip Delete Resources")
+		c.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
+	var result *multierror.Error
+	var err error
+	if err = k.DeleteDeployment(c.DeploymentName); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteNamespace(); err != nil {
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
 }
 
 func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {
