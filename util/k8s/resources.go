@@ -17,15 +17,13 @@ import (
 type K8s struct {
 	namespace string
 	clientset *kubernetes.Clientset
-	debug     bool
 	logger    func() *logrus.Entry
 }
 
-func NewK8s(namespace string, clientset *kubernetes.Clientset, debug bool, logger func() *logrus.Entry) *K8s {
+func NewK8s(namespace string, clientset *kubernetes.Clientset, logger func() *logrus.Entry) *K8s {
 	return &K8s{
 		namespace: namespace,
 		clientset: clientset,
-		debug:     debug,
 		logger:    logger,
 	}
 }

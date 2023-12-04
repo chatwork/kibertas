@@ -102,10 +102,35 @@ func (c *CertManager) Check() error {
 	return nil
 }
 
+func (c *CertManager) createResources(cert certificates) error {
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
+
+	if err := k.CreateNamespace(&apiv1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: c.Namespace,
+		}}); err != nil {
+		c.Logger().Error("Error create namespace:", err)
+		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
+		return err
+	}
+
+	if err := c.createCert(cert); err != nil {
+		c.Logger().Error("Error create certificate:", err)
+		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
+		return err
+	}
+	return nil
+}
+
 // cleanUpResources deletes the certificate, issuer, rootCA, and namespace associated with the given certificate.
 // It returns an error if any deletion operation fails.
 func (c *CertManager) cleanUpResources(cert certificates) error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
+	if c.Debug {
+		c.Logger().Info("Skip Delete Resources")
+		c.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 	var result *multierror.Error
 	var err error
 
@@ -135,26 +160,6 @@ func (c *CertManager) cleanUpResources(cert certificates) error {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
-}
-
-func (c *CertManager) createResources(cert certificates) error {
-	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Debug, c.Logger)
-
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: c.Namespace,
-		}}); err != nil {
-		c.Logger().Error("Error create namespace:", err)
-		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
-		return err
-	}
-
-	if err := c.createCert(cert); err != nil {
-		c.Logger().Error("Error create certificate:", err)
-		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
-		return err
-	}
-	return nil
 }
 
 func (c *CertManager) createCertificateObject() certificates {

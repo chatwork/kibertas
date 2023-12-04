@@ -121,25 +121,8 @@ func (f *Fluent) Check() error {
 	return nil
 }
 
-func (f *Fluent) cleanUpResources() error {
-	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
-	var result *multierror.Error
-	var err error
-
-	if err = k.DeleteDeployment(f.DeploymentName); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
-		result = multierror.Append(result, err)
-	}
-
-	if err = k.DeleteNamespace(); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
-		result = multierror.Append(result, err)
-	}
-	return result.ErrorOrNil()
-}
-
 func (f *Fluent) createResources() error {
-	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Debug, f.Logger)
+	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -155,6 +138,28 @@ func (f *Fluent) createResources() error {
 	}
 
 	return nil
+}
+
+func (f *Fluent) cleanUpResources() error {
+	if f.Debug {
+		f.Logger().Info("Skip Delete Resources")
+		f.Chatwork.AddMessage("Skip Delete Resources\n")
+		return nil
+	}
+	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
+	var result *multierror.Error
+	var err error
+
+	if err = k.DeleteDeployment(f.DeploymentName); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		result = multierror.Append(result, err)
+	}
+
+	if err = k.DeleteNamespace(); err != nil {
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
 }
 
 func (f *Fluent) checkS3Object() error {
