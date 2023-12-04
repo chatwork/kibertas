@@ -99,17 +99,17 @@ func (f *Fluent) Check() error {
 
 	f.ReplicaCount = (len(nodes.Items) / 3) + 1
 	f.Logger().Infof("%s replica counts: %d", f.DeploymentName, f.ReplicaCount)
-	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d", f.DeploymentName, f.ReplicaCount))
+	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d\n", f.DeploymentName, f.ReplicaCount))
 
 	if err := f.createResources(); err != nil {
 		if err := f.cleanUpResources(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		return err
 	}
 	defer func() {
 		if err := f.cleanUpResources(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -127,12 +127,12 @@ func (f *Fluent) cleanUpResources() error {
 	var err error
 
 	if err = k.DeleteDeployment(f.DeploymentName); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 
 	if err = k.DeleteNamespace(); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
@@ -145,12 +145,12 @@ func (f *Fluent) createResources() error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: f.Namespace,
 		}}); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
 	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout); err != nil {
-		f.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
+		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
 

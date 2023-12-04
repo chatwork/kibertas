@@ -81,13 +81,13 @@ func (i *Ingress) Check() error {
 
 	if err := i.createResources(); err != nil {
 		if err := i.cleanUpResources(); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		return err
 	}
 	defer func() {
 		if err := i.cleanUpResources(); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -109,22 +109,22 @@ func (i *Ingress) cleanUpResources() error {
 	var result *multierror.Error
 	var err error
 	if err = k.DeleteIngress(i.ResourceName); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Ingress: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 
 	if err = k.DeleteService(i.ResourceName); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Service: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 
 	if err = k.DeleteDeployment(i.ResourceName); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 
 	if err = k.DeleteNamespace(); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
@@ -137,19 +137,19 @@ func (i *Ingress) createResources() error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: i.Namespace,
 		}}); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 	if err := k.CreateDeployment(i.createDeploymentObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
 	if err := k.CreateService(i.createServiceObject()); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s\n", err))
 		return err
 	}
 	if err := k.CreateIngress(i.createIngressObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s\n", err))
 		return err
 	}
 	return nil

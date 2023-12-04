@@ -85,13 +85,13 @@ func (c *ClusterAutoscaler) Check() error {
 
 	if err := c.createResources(); err != nil {
 		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		return err
 	}
 	defer func() {
 		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -103,12 +103,12 @@ func (c *ClusterAutoscaler) cleanUpResources() error {
 	var result *multierror.Error
 	var err error
 	if err = k.DeleteDeployment(c.DeploymentName); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 
 	if err = k.DeleteNamespace(); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Namespace: %s\n", err))
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
@@ -121,13 +121,13 @@ func (c *ClusterAutoscaler) createResources() error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.Namespace,
 		}}); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
 	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
 
