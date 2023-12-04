@@ -24,6 +24,8 @@ type ClusterAutoscaler struct {
 	*cmd.Checker
 	DeploymentName string
 	ReplicaCount   int
+	NodeLabelKey   string
+	NodeLabelValue string
 }
 
 func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*ClusterAutoscaler, error) {
@@ -35,10 +37,20 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 	chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
 
 	deploymentName := "sample-for-scale"
+	nodeLabelKey := "eks.amazonaws.com/capacityType"
+	nodeLabelValue := "SPOT"
 	timeout := 20
 
 	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
 		deploymentName = v
+	}
+
+	if v := os.Getenv("NODE_LABEL_KEY"); v != "" {
+		nodeLabelKey = v
+	}
+
+	if v := os.Getenv("NODE_LABEL_VALUE"); v != "" {
+		nodeLabelValue = v
 	}
 
 	var err error
@@ -59,6 +71,8 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 	return &ClusterAutoscaler{
 		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
 		DeploymentName: deploymentName,
+		NodeLabelKey:   nodeLabelKey,
+		NodeLabelValue: nodeLabelValue,
 	}, nil
 }
 
@@ -69,7 +83,7 @@ func (c *ClusterAutoscaler) Check() error {
 	defer c.Chatwork.Send()
 
 	nodeListOption := metav1.ListOptions{
-		LabelSelector: "eks.amazonaws.com/capacityType=SPOT",
+		LabelSelector: fmt.Sprintf("%s=%s", c.NodeLabelKey, c.NodeLabelValue),
 	}
 
 	nodes, err := c.Clientset.CoreV1().Nodes().List(context.TODO(), nodeListOption)
@@ -80,18 +94,18 @@ func (c *ClusterAutoscaler) Check() error {
 	}
 
 	c.ReplicaCount = len(nodes.Items) + 1
-	c.Logger().Infof("spot nodes: %d", len(nodes.Items))
-	c.Chatwork.AddMessage(fmt.Sprintf("spot nodes: %d\n", len(nodes.Items)))
+	c.Logger().Infof("Nodes(have label: %s=%s): %d", c.NodeLabelKey, c.NodeLabelValue, len(nodes.Items))
+	c.Chatwork.AddMessage(fmt.Sprintf("Nodes(have label: %s=%s): %d\n", c.NodeLabelKey, c.NodeLabelValue, len(nodes.Items)))
 
 	if err := c.createResources(); err != nil {
 		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 		return err
 	}
 	defer func() {
 		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
+			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
 
@@ -105,13 +119,13 @@ func (c *ClusterAutoscaler) createResources() error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.Namespace,
 		}}); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprint("Error Create Namespace:", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
 	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout); err != nil {
-		c.Chatwork.AddMessage(fmt.Sprint("Error Create Deployment:", err))
+		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
 
@@ -161,6 +175,21 @@ func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {
 				},
 				Spec: apiv1.PodSpec{
 					Affinity: &apiv1.Affinity{
+						NodeAffinity: &apiv1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
+								NodeSelectorTerms: []apiv1.NodeSelectorTerm{
+									{
+										MatchExpressions: []apiv1.NodeSelectorRequirement{
+											{
+												Key:      c.NodeLabelKey,
+												Operator: apiv1.NodeSelectorOpIn,
+												Values:   []string{c.NodeLabelValue},
+											},
+										},
+									},
+								},
+							},
+						},
 						PodAntiAffinity: &apiv1.PodAntiAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: []apiv1.PodAffinityTerm{
 								{
