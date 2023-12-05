@@ -90,7 +90,7 @@ func (f *Fluent) Check(ctx context.Context) error {
 		LabelSelector: "eks.amazonaws.com/capacityType=SPOT",
 	}
 
-	nodes, err := f.Clientset.CoreV1().Nodes().List(context.TODO(), nodeListOption)
+	nodes, err := f.Clientset.CoreV1().Nodes().List(ctx, nodeListOption)
 	if err != nil {
 		f.Logger().Errorf("Error List Nodes: %s", err)
 		f.Chatwork.AddMessage(fmt.Sprintf("Error List Nodes: %s\n", err))
@@ -122,15 +122,17 @@ func (f *Fluent) Check(ctx context.Context) error {
 func (f *Fluent) createResources(ctx context.Context) error {
 	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
 
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: f.Namespace,
-		}}, ctx); err != nil {
+	if err := k.CreateNamespace(
+		ctx,
+		&apiv1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: f.Namespace,
+			}}); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
-	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout, ctx); err != nil {
+	if err := k.CreateDeployment(ctx, f.createDeploymentObject(), f.Timeout); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}

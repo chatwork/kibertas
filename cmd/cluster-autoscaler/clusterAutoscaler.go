@@ -112,16 +112,18 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 func (c *ClusterAutoscaler) createResources(ctx context.Context) error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: c.Namespace,
-		}}, ctx); err != nil {
+	if err := k.CreateNamespace(
+		ctx,
+		&apiv1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: c.Namespace,
+			}}); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
-	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout, ctx); err != nil {
+	if err := k.CreateDeployment(ctx, c.createDeploymentObject(), c.Timeout); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}

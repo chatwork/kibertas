@@ -29,7 +29,7 @@ func NewK8s(namespace string, clientset *kubernetes.Clientset, logger func() *lo
 }
 
 // Createは本当はApplyにしたいんだけど、ApplyがないのでCreateで代用
-func (k *K8s) CreateNamespace(ns *apiv1.Namespace, ctx context.Context) error {
+func (k *K8s) CreateNamespace(ctx context.Context, ns *apiv1.Namespace) error {
 	_, err := k.clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	k.logger().Infof("Creating Namespace: %s", ns.Name)
 	if err != nil && kerrors.IsAlreadyExists(err) {
@@ -58,7 +58,7 @@ func (k *K8s) DeleteNamespace() error {
 	return nil
 }
 
-func (k *K8s) CreateDeployment(deployment *appsv1.Deployment, timeout time.Duration, ctx context.Context) error {
+func (k *K8s) CreateDeployment(ctx context.Context, deployment *appsv1.Deployment, timeout time.Duration) error {
 	deploymentsClient := k.clientset.AppsV1().Deployments(k.namespace)
 
 	// Create Deployment
@@ -120,7 +120,7 @@ func (k *K8s) DeleteDeployment(deploymentName string) error {
 	return nil
 }
 
-func (k *K8s) CreateService(service *apiv1.Service, ctx context.Context) error {
+func (k *K8s) CreateService(ctx context.Context, service *apiv1.Service) error {
 	serviceClient := k.clientset.CoreV1().Services(k.namespace)
 
 	k.logger().Infof("Create service: %s", service.Name)
@@ -155,7 +155,7 @@ func (k *K8s) DeleteService(serviceName string) error {
 	return nil
 }
 
-func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, timeout time.Duration, ctx context.Context) error {
+func (k *K8s) CreateIngress(ctx context.Context, ingress *networkingv1.Ingress, timeout time.Duration) error {
 	ingressClient := k.clientset.NetworkingV1().Ingresses(k.namespace)
 
 	k.logger().Infof("Creating ingress: %s", ingress.Name)

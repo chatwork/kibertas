@@ -91,7 +91,7 @@ func (c *CertManager) Check(ctx context.Context) error {
 			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
-	if err := c.createResources(cert, ctx); err != nil {
+	if err := c.createResources(ctx, cert); err != nil {
 		return err
 	}
 
@@ -99,19 +99,21 @@ func (c *CertManager) Check(ctx context.Context) error {
 	return nil
 }
 
-func (c *CertManager) createResources(cert certificates, ctx context.Context) error {
+func (c *CertManager) createResources(ctx context.Context, cert certificates) error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: c.Namespace,
-		}}, ctx); err != nil {
+	if err := k.CreateNamespace(
+		ctx,
+		&apiv1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: c.Namespace,
+			}}); err != nil {
 		c.Logger().Error("Error create namespace:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
 		return err
 	}
 
-	if err := c.createCert(cert, ctx); err != nil {
+	if err := c.createCert(ctx, cert); err != nil {
 		c.Logger().Error("Error create certificate:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
 		return err
@@ -226,7 +228,7 @@ func (c *CertManager) createCertificateObject() certificates {
 // createCert creates a certificate with cert-manager
 // CRなので、client-goではなく、client-runtimeを使う
 // ここでしか作らないリソースなので、utilのほうには入れない
-func (c *CertManager) createCert(cert certificates, ctx context.Context) error {
+func (c *CertManager) createCert(ctx context.Context, cert certificates) error {
 	c.Logger().Infoln("Create RootCA:", cert.rootCA.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", cert.rootCA.ObjectMeta.Name))
 	err := c.Client.Create(ctx, cert.rootCA)
