@@ -48,7 +48,7 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	}
 
 	var err error
-	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+	if v := os.Getenv("TIMEOUT"); v != "" {
 		timeout, err = strconv.Atoi(v)
 		if err != nil {
 			logger().Errorf("strconv.Atoi: %s", err)
@@ -76,7 +76,7 @@ func NewDatadogAgent(debug bool, logger func() *logrus.Entry, chatwork *notify.C
 	}, nil
 }
 
-func (d *DatadogAgent) Check() error {
+func (d *DatadogAgent) Check(ctx context.Context) error {
 	defer d.Chatwork.Send()
 
 	if d.ApiKey == "" || d.AppKey == "" {
@@ -86,7 +86,7 @@ func (d *DatadogAgent) Check() error {
 	}
 	d.Chatwork.AddMessage("datadog-agent check start\n")
 
-	if err := d.checkMetrics(); err != nil {
+	if err := d.checkMetrics(ctx); err != nil {
 		d.Chatwork.AddMessage(fmt.Sprintf("checkMetrics error: %s\n", err.Error()))
 		return err
 	}
@@ -94,13 +94,13 @@ func (d *DatadogAgent) Check() error {
 	return nil
 }
 
-func (d *DatadogAgent) checkMetrics() error {
+func (d *DatadogAgent) checkMetrics(ctx context.Context) error {
 	keys := make(map[string]datadog.APIKey)
 	keys["apiKeyAuth"] = datadog.APIKey{Key: d.ApiKey}
 	keys["appKeyAuth"] = datadog.APIKey{Key: d.AppKey}
 
 	ddctx := datadog.NewDefaultContext(context.WithValue(
-		context.Background(),
+		ctx,
 		datadog.ContextAPIKeys,
 		keys,
 	))
@@ -109,14 +109,18 @@ func (d *DatadogAgent) checkMetrics() error {
 	apiClient := datadog.NewAPIClient(configuration)
 	api := datadogV1.NewMetricsApi(apiClient)
 
-	d.Logger().Info("Waiting metrics...")
-	time.Sleep(d.WaitTime)
-
 	d.Logger().Infof("Querying metrics with query: %s", d.QueryMetrics)
 	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s\n", d.QueryMetrics))
+
+	d.Logger().Info("Waiting metrics...")
+
+	if err := util.SleepContext(ctx, d.WaitTime); err != nil {
+		return err
+	}
+
 	now := time.Now().Unix()
 	from := now - 60*2
-	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, d.Timeout, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, 30*time.Second, d.Timeout, true, func(ctx context.Context) (bool, error) {
 		resp, r, err := api.QueryMetrics(ddctx, from, now, d.QueryMetrics)
 
 		if err != nil {
@@ -143,8 +147,18 @@ func (d *DatadogAgent) checkMetrics() error {
 		return false, nil
 	})
 	if err != nil {
-		d.Logger().Error("Timed out waiting for metrics to be ready:", err)
+		if err.Error() == "context canceled" {
+			d.Logger().Error("Context canceled in waiting for query metrics")
+			d.Chatwork.AddMessage("Context canceled in waiting for query metrics")
+		} else if err.Error() == "context deadline exceeded" {
+			d.Logger().Error("Timed out waiting for query metrics")
+			d.Chatwork.AddMessage("Timed out waiting for query metrics")
+		} else {
+			d.Logger().Error("Error waiting for query metrics:", err)
+			d.Chatwork.AddMessage(fmt.Sprintf("Error waiting for query metrics: %s\n", err))
+		}
 		return err
 	}
+
 	return nil
 }

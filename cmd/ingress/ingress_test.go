@@ -85,7 +85,7 @@ func TestCheckDNSRecord(t *testing.T) {
 		ExternalHostname: "go.chatwork.com",
 	}
 
-	err = ingress.checkDNSRecord()
+	err = ingress.checkDNSRecord(context.TODO())
 	if err != nil {
 		t.Fatalf("Expected No Error, but got error: %s", err)
 	}

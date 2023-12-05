@@ -1,6 +1,7 @@
 package datadogagent
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestCheck(t *testing.T) {
 		WaitTime:     1 * time.Second,
 	}
 
-	err = datadogAgent.Check()
+	err = datadogAgent.Check(context.TODO())
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -65,7 +66,7 @@ func TestCheck(t *testing.T) {
 		WaitTime:     1 * time.Second,
 	}
 
-	err = datadogAgent.Check()
+	err = datadogAgent.Check(context.TODO())
 	expectedError = errors.New("403 Forbidden")
 	if err.Error() != expectedError.Error() {
 		t.Errorf("Expected '%s', got '%s'", expectedError.Error(), err.Error())

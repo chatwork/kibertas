@@ -83,17 +83,6 @@ func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Ch
 func (c *CertManager) Check(ctx context.Context) error {
 	cert := c.createCertificateObject()
 
-	go func() {
-		<-ctx.Done()
-		c.Logger().Info("Received Ctrl+C. Exiting...")
-		c.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
-		if err := c.cleanUpResources(cert); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
-		}
-		c.Chatwork.Send()
-		os.Exit(0)
-	}()
-
 	c.Chatwork.AddMessage("cert-manager check start\n")
 	defer c.Chatwork.Send()
 
@@ -102,7 +91,7 @@ func (c *CertManager) Check(ctx context.Context) error {
 			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
-	if err := c.createResources(cert); err != nil {
+	if err := c.createResources(cert, ctx); err != nil {
 		return err
 	}
 
@@ -110,19 +99,19 @@ func (c *CertManager) Check(ctx context.Context) error {
 	return nil
 }
 
-func (c *CertManager) createResources(cert certificates) error {
+func (c *CertManager) createResources(cert certificates, ctx context.Context) error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.Namespace,
-		}}); err != nil {
+		}}, ctx); err != nil {
 		c.Logger().Error("Error create namespace:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create namespace:", err))
 		return err
 	}
 
-	if err := c.createCert(cert); err != nil {
+	if err := c.createCert(cert, ctx); err != nil {
 		c.Logger().Error("Error create certificate:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
 		return err
@@ -237,17 +226,17 @@ func (c *CertManager) createCertificateObject() certificates {
 // createCert creates a certificate with cert-manager
 // CRなので、client-goではなく、client-runtimeを使う
 // ここでしか作らないリソースなので、utilのほうには入れない
-func (c *CertManager) createCert(cert certificates) error {
+func (c *CertManager) createCert(cert certificates, ctx context.Context) error {
 	c.Logger().Infoln("Create RootCA:", cert.rootCA.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", cert.rootCA.ObjectMeta.Name))
-	err := c.Client.Create(context.Background(), cert.rootCA)
+	err := c.Client.Create(ctx, cert.rootCA)
 	if err != nil {
 		return err
 	}
 
 	secretClient := c.Clientset.CoreV1().Secrets(c.Namespace)
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.rootCA.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready", cert.rootCA.Spec.SecretName)
@@ -256,29 +245,38 @@ func (c *CertManager) createCert(cert certificates) error {
 		c.Logger().Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
 		return true, nil
 	})
+
 	if err != nil {
-		c.Logger().Error("Timed out waiting for RootCA secret to be ready:", err)
-		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for RootCA secret to be ready: %s\n", err))
+		if err.Error() == "context canceled" {
+			c.Logger().Error("Context canceled waiting for RootCA secret to be ready")
+			c.Chatwork.AddMessage("Context canceled waiting for RootCA secret to be ready")
+		} else if err.Error() == "context deadline exceeded" {
+			c.Logger().Error("Timed out waiting for RootCA secret to be ready")
+			c.Chatwork.AddMessage("Timed out waiting for RootCA secret to be ready")
+		} else {
+			c.Logger().Error("Error waiting for RootCA secret to be ready:", err)
+			c.Chatwork.AddMessage(fmt.Sprintf("Error waiting for RootCA secret to be ready: %s\n", err))
+		}
 		return err
 	}
 
 	//Create Issuer
 	c.Logger().Infoln("Create Issuer:", cert.issuer.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Issuer: %s\n", cert.issuer.ObjectMeta.Name))
-	err = c.Client.Create(context.Background(), cert.issuer)
+	err = c.Client.Create(ctx, cert.issuer)
 	if err != nil {
 		return err
 	}
 
 	c.Logger().Infoln("Create Certificate:", cert.certificate.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Certificate: %s\n", cert.certificate.ObjectMeta.Name))
-	err = c.Client.Create(context.Background(), cert.certificate)
+	err = c.Client.Create(ctx, cert.certificate)
 
 	if err != nil {
 		return err
 	}
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.certificate.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", cert.certificate.Spec.SecretName)
@@ -287,9 +285,18 @@ func (c *CertManager) createCert(cert certificates) error {
 		c.Logger().Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)
 		return true, nil
 	})
+
 	if err != nil {
-		c.Logger().Error("Timed out waiting for Certificate secret to be ready:", err)
-		c.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for Certificate secret to be ready: %s\n", err))
+		if err.Error() == "context canceled" {
+			c.Logger().Error("Context canceled waiting for Certificate secret to be ready")
+			c.Chatwork.AddMessage("Context canceled waiting for Certificate secret to be ready")
+		} else if err.Error() == "context deadline exceeded" {
+			c.Logger().Error("Timed out waiting for Certificate secret to be ready")
+			c.Chatwork.AddMessage("Timed out waiting for Certificate secret to be ready")
+		} else {
+			c.Logger().Error("Error waiting for Certificate secret to be ready:", err)
+			c.Chatwork.AddMessage(fmt.Sprintf("Error waiting for Certificate secret to be ready: %s\n", err))
+		}
 		return err
 	}
 

@@ -54,7 +54,7 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 	}
 
 	var err error
-	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+	if v := os.Getenv("TIMEOUT"); v != "" {
 		timeout, err = strconv.Atoi(v)
 		if err != nil {
 			logger().Errorf("strconv.Atoi: %s", err)
@@ -79,17 +79,6 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 // Check is check cluster-autoscaler
 // replicaをノード数+1でdeploymentを作成する
 func (c *ClusterAutoscaler) Check(ctx context.Context) error {
-	go func() {
-		<-ctx.Done()
-		c.Logger().Info("Received Ctrl+C. Exiting...")
-		c.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
-		if err := c.cleanUpResources(); err != nil {
-			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
-		}
-		c.Chatwork.Send()
-		os.Exit(0)
-	}()
-
 	c.Chatwork.AddMessage("cluster-autoscaler check start\n")
 	defer c.Chatwork.Send()
 
@@ -97,7 +86,7 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 		LabelSelector: fmt.Sprintf("%s=%s", c.NodeLabelKey, c.NodeLabelValue),
 	}
 
-	nodes, err := c.Clientset.CoreV1().Nodes().List(context.TODO(), nodeListOption)
+	nodes, err := c.Clientset.CoreV1().Nodes().List(ctx, nodeListOption)
 	if err != nil {
 		c.Logger().Errorf("Error List Nodes: %s", err)
 		c.Chatwork.AddMessage(fmt.Sprintf("Error List Nodes: %s\n", err))
@@ -114,25 +103,25 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 		}
 	}()
 
-	if err := c.createResources(); err != nil {
+	if err := c.createResources(ctx); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *ClusterAutoscaler) createResources() error {
+func (c *ClusterAutoscaler) createResources(ctx context.Context) error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.Namespace,
-		}}); err != nil {
+		}}, ctx); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
-	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout); err != nil {
+	if err := k.CreateDeployment(c.createDeploymentObject(), c.Timeout, ctx); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}

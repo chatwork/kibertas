@@ -59,7 +59,7 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 	}
 
 	var err error
-	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+	if v := os.Getenv("TIMEOUT"); v != "" {
 		timeout, err = strconv.Atoi(v)
 		if err != nil {
 			logger().Errorf("strconv.Atoi: %s", err)
@@ -83,17 +83,6 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 }
 
 func (f *Fluent) Check(ctx context.Context) error {
-	go func() {
-		<-ctx.Done()
-		f.Logger().Info("Received Ctrl+C. Exiting...")
-		f.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
-		if err := f.cleanUpResources(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s", err))
-		}
-		f.Chatwork.Send()
-		os.Exit(0)
-	}()
-
 	f.Chatwork.AddMessage("fluent check start\n")
 	defer f.Chatwork.Send()
 
@@ -118,11 +107,11 @@ func (f *Fluent) Check(ctx context.Context) error {
 		}
 	}()
 
-	if err := f.createResources(); err != nil {
+	if err := f.createResources(ctx); err != nil {
 		return err
 	}
 
-	if err := f.checkS3Object(); err != nil {
+	if err := f.checkS3Object(ctx); err != nil {
 		return err
 	}
 
@@ -130,18 +119,18 @@ func (f *Fluent) Check(ctx context.Context) error {
 	return nil
 }
 
-func (f *Fluent) createResources() error {
+func (f *Fluent) createResources(ctx context.Context) error {
 	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: f.Namespace,
-		}}); err != nil {
+		}}, ctx); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
-	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout); err != nil {
+	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout, ctx); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
@@ -171,7 +160,7 @@ func (f *Fluent) cleanUpResources() error {
 	return result.ErrorOrNil()
 }
 
-func (f *Fluent) checkS3Object() error {
+func (f *Fluent) checkS3Object(ctx context.Context) error {
 	client := s3.NewFromConfig(f.Awscfg)
 	t := time.Now()
 	targetBucket := f.LogBucketName
@@ -182,10 +171,10 @@ func (f *Fluent) checkS3Object() error {
 		Prefix: aws.String(targetPrefix),
 	}
 
-	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, f.Timeout, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, 60*time.Second, f.Timeout, false, func(ctx context.Context) (bool, error) {
 		f.Logger().Infof("Wait fluentd output to s3://%s/%s ...", targetBucket, targetPrefix)
 
-		result, err := client.ListObjectsV2(context.TODO(), input)
+		result, err := client.ListObjectsV2(ctx, input)
 		if err != nil {
 			f.Logger().Error("Got an error retrieving items:", err)
 			return false, nil
@@ -208,8 +197,16 @@ func (f *Fluent) checkS3Object() error {
 	})
 
 	if err != nil {
-		f.Logger().Error("Timed out waiting for output S3 Object:", err)
-		f.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for output S3 Object: %s\n", err))
+		if err.Error() == "context canceled" {
+			f.Logger().Error("Context canceled in waiting for S3 objects")
+			f.Chatwork.AddMessage("Context canceled in waiting for S3 objects")
+		} else if err.Error() == "context deadline exceeded" {
+			f.Logger().Error("Timed out waiting for S3 object")
+			f.Chatwork.AddMessage("Timed out waiting for S3 object")
+		} else {
+			f.Logger().Error("Error waiting for S3 object:", err)
+			f.Chatwork.AddMessage(fmt.Sprintf("Error waiting for S3 object: %s\n", err))
+		}
 		return err
 	}
 

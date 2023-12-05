@@ -103,13 +103,13 @@ func main() {
 		Use:   "datadog-agent",
 		Short: "test datadog-agent",
 		Long:  "test datadog-agent",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: runE(func(ctx context.Context) error {
 			da, err := datadogagent.NewDatadogAgent(debug, logger, chatwork)
 			if err != nil {
 				return err
 			}
-			return da.Check()
-		},
+			return da.Check(ctx)
+		}),
 	}
 
 	var cmdCertManager = &cobra.Command{
@@ -200,13 +200,13 @@ func main() {
 	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
 	cmdIngress.Flags().StringVar(&ingressClassName, "ingress-class-name", "alb", "This is a flag for the ingress class name. If you want to change the ingress class name, please specify the name.(default: alb)")
 
-	ctx := newSignalContext()
+	ctx := newSignalContext(logger, chatwork)
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		logger().Fatal("error: ", err)
 	}
 }
 
-func newSignalContext() context.Context {
+func newSignalContext(logger func() *logrus.Entry, chatwork *notify.Chatwork) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	c := make(chan os.Signal, 1)
@@ -214,6 +214,8 @@ func newSignalContext() context.Context {
 
 	go func() {
 		<-c
+		logger().Info("Received Ctrl+C. Exiting...")
+		chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
 		cancel()
 	}()
 
@@ -223,7 +225,6 @@ func newSignalContext() context.Context {
 func runE(fn func(context.Context) error) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		if err := fn(cmd.Context()); err != nil {
-			logrus.Error(err)
 			return err
 		}
 

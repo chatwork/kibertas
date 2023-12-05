@@ -52,7 +52,7 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 	}
 
 	var err error
-	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
+	if v := os.Getenv("TIMEOUT"); v != "" {
 		timeout, err = strconv.Atoi(v)
 		if err != nil {
 			logger().Errorf("strconv.Atoi: %s", err)
@@ -76,16 +76,6 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 }
 
 func (i *Ingress) Check(ctx context.Context) error {
-	go func() {
-		<-ctx.Done()
-		i.Logger().Info("Received Ctrl+C. Exiting...")
-		i.Chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
-		if err := i.cleanUpResources(); err != nil {
-			i.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
-		}
-		i.Chatwork.Send()
-		os.Exit(0)
-	}()
 	i.Chatwork.AddMessage("ingress check start\n")
 	defer i.Chatwork.Send()
 
@@ -95,7 +85,7 @@ func (i *Ingress) Check(ctx context.Context) error {
 		}
 	}()
 
-	if err := i.createResources(); err != nil {
+	if err := i.createResources(ctx); err != nil {
 		return err
 	}
 
@@ -103,7 +93,7 @@ func (i *Ingress) Check(ctx context.Context) error {
 		i.Chatwork.AddMessage("Skip Dns Check\n")
 		i.Logger().Info("Skip Dns Check")
 	} else {
-		if err := i.checkDNSRecord(); err != nil {
+		if err := i.checkDNSRecord(ctx); err != nil {
 			return err
 		}
 	}
@@ -112,25 +102,25 @@ func (i *Ingress) Check(ctx context.Context) error {
 	return nil
 }
 
-func (i *Ingress) createResources() error {
+func (i *Ingress) createResources(ctx context.Context) error {
 	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Logger)
 
 	if err := k.CreateNamespace(&apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: i.Namespace,
-		}}); err != nil {
+		}}, ctx); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
 		return err
 	}
-	if err := k.CreateDeployment(i.createDeploymentObject(), i.Timeout); err != nil {
+	if err := k.CreateDeployment(i.createDeploymentObject(), i.Timeout, ctx); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
 		return err
 	}
-	if err := k.CreateService(i.createServiceObject()); err != nil {
+	if err := k.CreateService(i.createServiceObject(), ctx); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
 		return err
 	}
-	if err := k.CreateIngress(i.createIngressObject(), i.Timeout); err != nil {
+	if err := k.CreateIngress(i.createIngressObject(), i.Timeout, ctx); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
 		return err
 	}
@@ -279,13 +269,13 @@ func (i *Ingress) createIngressObject() *networkingv1.Ingress {
 	return ingress
 }
 
-func (i *Ingress) checkDNSRecord() error {
+func (i *Ingress) checkDNSRecord(ctx context.Context) error {
 	c := new(dns.Client)
 	m := new(dns.Msg)
 
 	i.Chatwork.AddMessage("ingress create finished\n")
 	i.Logger().Println("Check DNS Record for: ", i.ExternalHostname)
-	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, 30*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
 		m.SetQuestion(dns.Fqdn(i.ExternalHostname), dns.TypeA)
 		r, _, err := c.Exchange(m, "8.8.8.8:53")
 
@@ -312,7 +302,16 @@ func (i *Ingress) checkDNSRecord() error {
 	})
 
 	if err != nil {
-		i.Logger().Error("Timed out waiting for DNS Record to be ready:", err)
+		if err.Error() == "context canceled" {
+			i.Logger().Error("Context canceled in waiting for DNS Record to be ready")
+			i.Chatwork.AddMessage("Context canceled in waiting for DNS Record to be ready")
+		} else if err.Error() == "context deadline exceeded" {
+			i.Logger().Error("Timed out waiting for DNS Record to be ready")
+			i.Chatwork.AddMessage("Timed out waiting for DNS Record to be ready")
+		} else {
+			i.Logger().Error("Error waiting for DNS Record to be ready:", err)
+			i.Chatwork.AddMessage(fmt.Sprintf("Error waiting for DNS Record to be ready: %s\n", err))
+		}
 		return err
 	}
 	return nil
