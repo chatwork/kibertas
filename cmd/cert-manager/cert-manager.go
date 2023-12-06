@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	cmapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -14,20 +13,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
 	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/k8s"
-	"github.com/chatwork/kibertas/util/notify"
-	"github.com/sirupsen/logrus"
 )
 
 type CertManager struct {
 	*cmd.Checker
-	CertName string
-	Client   client.Client
+	Namespace string
+	CertName  string
+	Clientset *kubernetes.Clientset
+	Client    client.Client
 }
 
 type certificates struct {
@@ -36,51 +36,43 @@ type certificates struct {
 	certificate *cmapiv1.Certificate
 }
 
-func NewCertManager(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*CertManager, error) {
+func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	logger().Infof("cert-manager check application namespace: %s", namespace)
-	chatwork.AddMessage(fmt.Sprintf("cert-manager check application namespace: %s\n", namespace))
+	checker.Logger().Infof("cert-manager check application namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("cert-manager check application namespace: %s\n", namespace))
 
 	certName := "sample"
-	timeout := 20
 
 	if v := os.Getenv("CERT_NAME"); v != "" {
 		certName = v
 	}
-	scheme := runtime.NewScheme()
-	_ = cmapiv1.AddToScheme(scheme)
-
-	var err error
-	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
-		timeout, err = strconv.Atoi(v)
-		if err != nil {
-			logger().Errorf("strconv.Atoi: %s", err)
-			return nil, err
-		}
-	}
 
 	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {
-		logger().Errorf("NewK8sClientset: %s", err)
-		return nil, err
+		checker.Logger().Fatal("Error NewK8sClientset: ", err)
 	}
+
+	scheme := runtime.NewScheme()
+	_ = cmapiv1.AddToScheme(scheme)
 
 	k8sclient, err := config.NewK8sClient(client.Options{Scheme: scheme})
 	if err != nil {
-		logger().Errorf("NewK8sClient: %s", err)
+		checker.Logger().Errorf("NewK8sClient: %s", err)
 		return nil, err
 	}
 
 	return &CertManager{
-		Checker:  cmd.NewChecker(namespace, k8sclientset, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
-		CertName: certName,
-		Client:   k8sclient,
+		Checker:   checker,
+		Namespace: namespace,
+		CertName:  certName,
+		Clientset: k8sclientset,
+		Client:    k8sclient,
 	}, nil
 }
 
-func (c *CertManager) Check(ctx context.Context) error {
+func (c *CertManager) Check() error {
 	cert := c.createCertificateObject()
 
 	c.Chatwork.AddMessage("cert-manager check start\n")
@@ -91,7 +83,7 @@ func (c *CertManager) Check(ctx context.Context) error {
 			c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
-	if err := c.createResources(ctx, cert); err != nil {
+	if err := c.createResources(cert); err != nil {
 		return err
 	}
 
@@ -99,11 +91,11 @@ func (c *CertManager) Check(ctx context.Context) error {
 	return nil
 }
 
-func (c *CertManager) createResources(ctx context.Context, cert certificates) error {
+func (c *CertManager) createResources(cert certificates) error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
 	if err := k.CreateNamespace(
-		ctx,
+		c.Ctx,
 		&apiv1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: c.Namespace,
@@ -113,7 +105,7 @@ func (c *CertManager) createResources(ctx context.Context, cert certificates) er
 		return err
 	}
 
-	if err := c.createCert(ctx, cert); err != nil {
+	if err := c.createCert(cert); err != nil {
 		c.Logger().Error("Error create certificate:", err)
 		c.Chatwork.AddMessage(fmt.Sprint("Error create certificate:", err))
 		return err
@@ -228,17 +220,17 @@ func (c *CertManager) createCertificateObject() certificates {
 // createCert creates a certificate with cert-manager
 // CRなので、client-goではなく、client-runtimeを使う
 // ここでしか作らないリソースなので、utilのほうには入れない
-func (c *CertManager) createCert(ctx context.Context, cert certificates) error {
+func (c *CertManager) createCert(cert certificates) error {
 	c.Logger().Infoln("Create RootCA:", cert.rootCA.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", cert.rootCA.ObjectMeta.Name))
-	err := c.Client.Create(ctx, cert.rootCA)
+	err := c.Client.Create(c.Ctx, cert.rootCA)
 	if err != nil {
 		return err
 	}
 
 	secretClient := c.Clientset.CoreV1().Secrets(c.Namespace)
 
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(c.Ctx, 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.rootCA.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
 			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready", cert.rootCA.Spec.SecretName)
@@ -255,23 +247,23 @@ func (c *CertManager) createCert(ctx context.Context, cert certificates) error {
 	//Create Issuer
 	c.Logger().Infoln("Create Issuer:", cert.issuer.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Issuer: %s\n", cert.issuer.ObjectMeta.Name))
-	err = c.Client.Create(ctx, cert.issuer)
+	err = c.Client.Create(c.Ctx, cert.issuer)
 	if err != nil {
 		return err
 	}
 
 	c.Logger().Infoln("Create Certificate:", cert.certificate.ObjectMeta.Name)
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Certificate: %s\n", cert.certificate.ObjectMeta.Name))
-	err = c.Client.Create(ctx, cert.certificate)
+	err = c.Client.Create(c.Ctx, cert.certificate)
 
 	if err != nil {
 		return err
 	}
 
-	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(c.Ctx, 5*time.Second, c.Timeout, true, func(ctx context.Context) (bool, error) {
 		secret, err := secretClient.Get(ctx, cert.certificate.Spec.SecretName, metav1.GetOptions{})
 		if err != nil {
-			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready\n", cert.certificate.Spec.SecretName)
+			c.Logger().WithError(err).Errorf("Waiting for secret %s to be ready", cert.certificate.Spec.SecretName)
 			return false, nil
 		}
 		c.Logger().Infof("Created secret:%s at %s", secret.Name, secret.CreationTimestamp)

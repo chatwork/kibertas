@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chatwork/kibertas/cmd"
 	certmanager "github.com/chatwork/kibertas/cmd/cert-manager"
 	clusterautoscaler "github.com/chatwork/kibertas/cmd/cluster-autoscaler"
 	datadogagent "github.com/chatwork/kibertas/cmd/datadog-agent"
@@ -39,12 +40,19 @@ import (
 )
 
 func main() {
-	var debug bool
 	var logLevel string
-	var ingressClassName string
-	var noDnsCheck bool
+
+	var checker *cmd.Checker
+	var debug bool
+	var timeout int
 	var logger func() *logrus.Entry
 	var chatwork *notify.Chatwork
+
+	var ctx context.Context
+
+	var ingressClassName string
+	var noDnsCheck bool
+
 	var rootCmd = &cobra.Command{
 		Use:           "kibertas",
 		SilenceUsage:  true,
@@ -64,65 +72,70 @@ func main() {
 		Use:   "cluster-autoscaler",
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
-		RunE: runE(func(ctx context.Context) error {
-			ca, err := clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork)
+		RunE: func(cobra_cmd *cobra.Command, args []string) error {
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			ca, err := clusterautoscaler.NewClusterAutoscaler(checker)
 			if err != nil {
 				return err
 			}
-			return ca.Check(ctx)
-		}),
+			return ca.Check()
+		},
 	}
 
 	var cmdIngress = &cobra.Command{
 		Use:   "ingress",
 		Short: "test ingress",
 		Long:  "test ingress(ingress-controller, external-dns)",
-		RunE: runE(func(ctx context.Context) error {
-			i, err := ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName)
+		RunE: func(cobra_cmd *cobra.Command, args []string) error {
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			i, err := ingress.NewIngress(checker, noDnsCheck, ingressClassName)
 			if err != nil {
 				return err
 			}
-			return i.Check(ctx)
-		}),
+			return i.Check()
+		},
 	}
 
 	var cmdFluent = &cobra.Command{
 		Use:   "fluent",
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
-		RunE: runE(func(ctx context.Context) error {
-			f, err := fluent.NewFluent(debug, logger, chatwork)
+		RunE: func(cobra_cmd *cobra.Command, args []string) error {
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			f, err := fluent.NewFluent(checker)
 			if err != nil {
 				return err
 			}
-			return f.Check(ctx)
-		}),
+			return f.Check()
+		},
 	}
 
 	var cmdDatadogAgent = &cobra.Command{
 		Use:   "datadog-agent",
 		Short: "test datadog-agent",
 		Long:  "test datadog-agent",
-		RunE: runE(func(ctx context.Context) error {
-			da, err := datadogagent.NewDatadogAgent(debug, logger, chatwork)
+		RunE: func(cobra_cmd *cobra.Command, args []string) error {
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			da, err := datadogagent.NewDatadogAgent(checker)
 			if err != nil {
 				return err
 			}
-			return da.Check(ctx)
-		}),
+			return da.Check()
+		},
 	}
 
 	var cmdCertManager = &cobra.Command{
 		Use:   "cert-manager",
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
-		RunE: runE(func(ctx context.Context) error {
-			cm, err := certmanager.NewCertManager(debug, logger, chatwork)
+		RunE: func(cobra_cmd *cobra.Command, args []string) error {
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			cm, err := certmanager.NewCertManager(checker)
 			if err != nil {
 				return err
 			}
-			return cm.Check(ctx)
-		}),
+			return cm.Check()
+		},
 	}
 
 	/*
@@ -177,6 +190,7 @@ func main() {
 	*/
 
 	rootCmd.AddCommand(cmdTest)
+	rootCmd.PersistentFlags().IntVar(&timeout, "timeout", 15, "Check timeout. If you want to change the timeout, please specify the number of minutes.")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug mode")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "The log level to use. Valid values are \"debug\", \"info\", \"warn\", \"error\", and \"fatal\".")
 	logger, err := initLogger(logLevel, debug)
@@ -189,6 +203,10 @@ func main() {
 	logger().Debug("log level: ", logLevel)
 
 	chatwork = initChatwork(logger)
+	ctx = newSignalContext(logger, chatwork)
+
+	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
+	cmdIngress.Flags().StringVar(&ingressClassName, "ingress-class-name", "alb", "This is a flag for the ingress class name. If you want to change the ingress class name, please specify the name.(default: alb)")
 
 	//cmdTest.AddCommand(cmdAll)
 	cmdTest.AddCommand(cmdFluent)
@@ -197,12 +215,8 @@ func main() {
 	cmdTest.AddCommand(cmdCertManager)
 	cmdTest.AddCommand(cmdDatadogAgent)
 
-	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
-	cmdIngress.Flags().StringVar(&ingressClassName, "ingress-class-name", "alb", "This is a flag for the ingress class name. If you want to change the ingress class name, please specify the name.(default: alb)")
-
-	ctx := newSignalContext(logger, chatwork)
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		logger().Fatal("error: ", err)
+	if err := rootCmd.Execute(); err != nil {
+		logger().Fatal("Error: ", err)
 	}
 }
 
@@ -220,16 +234,6 @@ func newSignalContext(logger func() *logrus.Entry, chatwork *notify.Chatwork) co
 	}()
 
 	return ctx
-}
-
-func runE(fn func(context.Context) error) func(cmd *cobra.Command, args []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		if err := fn(cmd.Context()); err != nil {
-			return err
-		}
-
-		return nil
-	}
 }
 
 func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {

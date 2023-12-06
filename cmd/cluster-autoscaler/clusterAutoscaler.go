@@ -1,45 +1,43 @@
 package clusterautoscaler
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
 	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/k8s"
-	"github.com/chatwork/kibertas/util/notify"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sirupsen/logrus"
 )
 
 type ClusterAutoscaler struct {
 	*cmd.Checker
+	Clientset      *kubernetes.Clientset
+	Namespace      string
 	DeploymentName string
 	ReplicaCount   int
 	NodeLabelKey   string
 	NodeLabelValue string
 }
 
-func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*ClusterAutoscaler, error) {
+func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cluster-autoscaler-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
 
-	logger().Infof("cluster-autoscaler check application namespace: %s\n", namespace)
-	chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
+	checker.Logger().Infof("cluster-autoscaler check application namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
 
 	deploymentName := "sample-for-scale"
 	nodeLabelKey := "eks.amazonaws.com/capacityType"
 	nodeLabelValue := "SPOT"
-	timeout := 20
 
 	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
 		deploymentName = v
@@ -53,23 +51,15 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 		nodeLabelValue = v
 	}
 
-	var err error
-	if v := os.Getenv("TIMEOUT"); v != "" {
-		timeout, err = strconv.Atoi(v)
-		if err != nil {
-			logger().Errorf("strconv.Atoi: %s", err)
-			return nil, err
-		}
-	}
-
-	k8sclient, err := config.NewK8sClientset()
+	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {
-		logger().Errorf("NewK8sClientset: %s", err)
-		return nil, err
+		checker.Logger().Fatal("Error NewK8sClientset: ", err)
 	}
 
 	return &ClusterAutoscaler{
-		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
+		Checker:        checker,
+		Clientset:      k8sclientset,
+		Namespace:      namespace,
 		DeploymentName: deploymentName,
 		NodeLabelKey:   nodeLabelKey,
 		NodeLabelValue: nodeLabelValue,
@@ -78,7 +68,7 @@ func NewClusterAutoscaler(debug bool, logger func() *logrus.Entry, chatwork *not
 
 // Check is check cluster-autoscaler
 // replicaをノード数+1でdeploymentを作成する
-func (c *ClusterAutoscaler) Check(ctx context.Context) error {
+func (c *ClusterAutoscaler) Check() error {
 	c.Chatwork.AddMessage("cluster-autoscaler check start\n")
 	defer c.Chatwork.Send()
 
@@ -86,7 +76,7 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 		LabelSelector: fmt.Sprintf("%s=%s", c.NodeLabelKey, c.NodeLabelValue),
 	}
 
-	nodes, err := c.Clientset.CoreV1().Nodes().List(ctx, nodeListOption)
+	nodes, err := c.Clientset.CoreV1().Nodes().List(c.Ctx, nodeListOption)
 	if err != nil {
 		c.Logger().Errorf("Error List Nodes: %s", err)
 		c.Chatwork.AddMessage(fmt.Sprintf("Error List Nodes: %s\n", err))
@@ -103,17 +93,17 @@ func (c *ClusterAutoscaler) Check(ctx context.Context) error {
 		}
 	}()
 
-	if err := c.createResources(ctx); err != nil {
+	if err := c.createResources(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *ClusterAutoscaler) createResources(ctx context.Context) error {
+func (c *ClusterAutoscaler) createResources() error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 
 	if err := k.CreateNamespace(
-		ctx,
+		c.Ctx,
 		&apiv1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: c.Namespace,
@@ -123,7 +113,7 @@ func (c *ClusterAutoscaler) createResources(ctx context.Context) error {
 	}
 
 	c.Chatwork.AddMessage(fmt.Sprintf("Create Deployment with desire replicas %d\n", c.ReplicaCount))
-	if err := k.CreateDeployment(ctx, c.createDeploymentObject(), c.Timeout); err != nil {
+	if err := k.CreateDeployment(c.Ctx, c.createDeploymentObject(), c.Timeout); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}

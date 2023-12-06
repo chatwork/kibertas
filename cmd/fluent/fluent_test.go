@@ -1,8 +1,11 @@
 package fluent
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/util/notify"
 
 	"github.com/sirupsen/logrus"
@@ -13,7 +16,8 @@ func TestNewFluent(t *testing.T) {
 		return logrus.NewEntry(logrus.New())
 	}
 	chatwork := &notify.Chatwork{}
-	fluent, err := NewFluent(true, logger, chatwork)
+	checker := cmd.NewChecker(context.TODO(), false, logger, chatwork, 3*time.Minute)
+	fluent, err := NewFluent(checker)
 	if err != nil {
 		t.Fatalf("NewFluent: %s", err)
 	}

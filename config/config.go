@@ -11,8 +11,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewAwsConfig() aws.Config {
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+func NewAwsConfig(ctx context.Context) aws.Config {
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Printf("unable to load SDK config: %v", err)
 	}

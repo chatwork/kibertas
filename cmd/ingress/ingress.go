@@ -4,45 +4,44 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
 	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/k8s"
-	"github.com/chatwork/kibertas/util/notify"
 
 	"github.com/miekg/dns"
-	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/hashicorp/go-multierror"
 )
 
 type Ingress struct {
 	*cmd.Checker
+	Namespace        string
+	Clientset        *kubernetes.Clientset
 	NoDnsCheck       bool
 	IngressClassName string
 	ResourceName     string
 	ExternalHostname string
 }
 
-func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork, noDnsCheck bool, ingressClassName string) (*Ingress, error) {
+func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) (*Ingress, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	logger().Infof("ingress check application namespace: %s", namespace)
-	chatwork.AddMessage(fmt.Sprintf("ingress check application namespace: %s\n", namespace))
+	checker.Logger().Infof("ingress check application namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("ingress check application namespace: %s\n", namespace))
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
-	timeout := 20
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
@@ -51,23 +50,16 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 		externalHostName = v
 	}
 
-	var err error
-	if v := os.Getenv("TIMEOUT"); v != "" {
-		timeout, err = strconv.Atoi(v)
-		if err != nil {
-			logger().Errorf("strconv.Atoi: %s", err)
-			return nil, err
-		}
-	}
-
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
-		logger().Errorf("NewK8sClientset: %s", err)
+		checker.Logger().Errorf("NewK8sClientset: %s", err)
 		return nil, err
 	}
 
 	return &Ingress{
-		Checker:          cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
+		Checker:          checker,
+		Namespace:        namespace,
+		Clientset:        k8sclient,
 		ResourceName:     resourceName,
 		NoDnsCheck:       noDnsCheck,
 		IngressClassName: ingressClassName,
@@ -75,7 +67,7 @@ func NewIngress(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwo
 	}, nil
 }
 
-func (i *Ingress) Check(ctx context.Context) error {
+func (i *Ingress) Check() error {
 	i.Chatwork.AddMessage("ingress check start\n")
 	defer i.Chatwork.Send()
 
@@ -85,7 +77,7 @@ func (i *Ingress) Check(ctx context.Context) error {
 		}
 	}()
 
-	if err := i.createResources(ctx); err != nil {
+	if err := i.createResources(); err != nil {
 		return err
 	}
 
@@ -93,7 +85,7 @@ func (i *Ingress) Check(ctx context.Context) error {
 		i.Chatwork.AddMessage("Skip Dns Check\n")
 		i.Logger().Info("Skip Dns Check")
 	} else {
-		if err := i.checkDNSRecord(ctx); err != nil {
+		if err := i.checkDNSRecord(); err != nil {
 			return err
 		}
 	}
@@ -102,11 +94,11 @@ func (i *Ingress) Check(ctx context.Context) error {
 	return nil
 }
 
-func (i *Ingress) createResources(ctx context.Context) error {
+func (i *Ingress) createResources() error {
 	k := k8s.NewK8s(i.Namespace, i.Clientset, i.Logger)
 
 	if err := k.CreateNamespace(
-		ctx,
+		i.Ctx,
 		&apiv1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: i.Namespace,
@@ -114,15 +106,15 @@ func (i *Ingress) createResources(ctx context.Context) error {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
 		return err
 	}
-	if err := k.CreateDeployment(ctx, i.createDeploymentObject(), i.Timeout); err != nil {
+	if err := k.CreateDeployment(i.Ctx, i.createDeploymentObject(), i.Timeout); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
 		return err
 	}
-	if err := k.CreateService(ctx, i.createServiceObject()); err != nil {
+	if err := k.CreateService(i.Ctx, i.createServiceObject()); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
 		return err
 	}
-	if err := k.CreateIngress(ctx, i.createIngressObject(), i.Timeout); err != nil {
+	if err := k.CreateIngress(i.Ctx, i.createIngressObject(), i.Timeout); err != nil {
 		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
 		return err
 	}
@@ -271,13 +263,13 @@ func (i *Ingress) createIngressObject() *networkingv1.Ingress {
 	return ingress
 }
 
-func (i *Ingress) checkDNSRecord(ctx context.Context) error {
+func (i *Ingress) checkDNSRecord() error {
 	c := new(dns.Client)
 	m := new(dns.Msg)
 
 	i.Chatwork.AddMessage("ingress create finished\n")
 	i.Logger().Println("Check DNS Record for: ", i.ExternalHostname)
-	err := wait.PollUntilContextTimeout(ctx, 30*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(i.Ctx, 30*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
 		m.SetQuestion(dns.Fqdn(i.ExternalHostname), dns.TypeA)
 		r, _, err := c.Exchange(m, "8.8.8.8:53")
 
