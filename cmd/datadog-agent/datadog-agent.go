@@ -147,17 +147,7 @@ func (d *DatadogAgent) checkMetrics(ctx context.Context) error {
 		return false, nil
 	})
 	if err != nil {
-		if err.Error() == "context canceled" {
-			d.Logger().Error("Context canceled in waiting for query metrics")
-			d.Chatwork.AddMessage("Context canceled in waiting for query metrics")
-		} else if err.Error() == "context deadline exceeded" {
-			d.Logger().Error("Timed out waiting for query metrics")
-			d.Chatwork.AddMessage("Timed out waiting for query metrics")
-		} else {
-			d.Logger().Error("Error waiting for query metrics:", err)
-			d.Chatwork.AddMessage(fmt.Sprintf("Error waiting for query metrics: %s\n", err))
-		}
-		return err
+		return fmt.Errorf("waiting for query metrics results: %w", err)
 	}
 
 	return nil

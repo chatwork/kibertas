@@ -304,17 +304,8 @@ func (i *Ingress) checkDNSRecord(ctx context.Context) error {
 	})
 
 	if err != nil {
-		if err.Error() == "context canceled" {
-			i.Logger().Error("Context canceled in waiting for DNS Record to be ready")
-			i.Chatwork.AddMessage("Context canceled in waiting for DNS Record to be ready")
-		} else if err.Error() == "context deadline exceeded" {
-			i.Logger().Error("Timed out waiting for DNS Record to be ready")
-			i.Chatwork.AddMessage("Timed out waiting for DNS Record to be ready")
-		} else {
-			i.Logger().Error("Error waiting for DNS Record to be ready:", err)
-			i.Chatwork.AddMessage(fmt.Sprintf("Error waiting for DNS Record to be ready: %s\n", err))
-		}
-		return err
+		return fmt.Errorf("waiting for DNS Record to be ready: %w", err)
 	}
+
 	return nil
 }

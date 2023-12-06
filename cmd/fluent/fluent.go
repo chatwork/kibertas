@@ -199,17 +199,7 @@ func (f *Fluent) checkS3Object(ctx context.Context) error {
 	})
 
 	if err != nil {
-		if err.Error() == "context canceled" {
-			f.Logger().Error("Context canceled in waiting for S3 objects")
-			f.Chatwork.AddMessage("Context canceled in waiting for S3 objects")
-		} else if err.Error() == "context deadline exceeded" {
-			f.Logger().Error("Timed out waiting for S3 object")
-			f.Chatwork.AddMessage("Timed out waiting for S3 object")
-		} else {
-			f.Logger().Error("Error waiting for S3 object:", err)
-			f.Chatwork.AddMessage(fmt.Sprintf("Error waiting for S3 object: %s\n", err))
-		}
-		return err
+		return fmt.Errorf("error waiting for S3 objects to be ready: %w", err)
 	}
 
 	f.Logger().Infoln("All S3 Objects are available.")

@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -91,14 +92,7 @@ func (k *K8s) CreateDeployment(ctx context.Context, deployment *appsv1.Deploymen
 	})
 
 	if err != nil {
-		if err.Error() == "context canceled" {
-			k.logger().Error("Context canceled waiting for Pods to be ready")
-		} else if err.Error() == "context deadline exceeded" {
-			k.logger().Error("Timed out waiting for Pods to be ready")
-		} else {
-			k.logger().Error("Error waiting for Pods to be ready:", err)
-		}
-		return err
+		return fmt.Errorf("waiting for Pods to be ready: %w", err)
 	}
 
 	k.logger().Infoln("All Pods are ready")
@@ -190,14 +184,7 @@ func (k *K8s) CreateIngress(ctx context.Context, ingress *networkingv1.Ingress, 
 		})
 
 		if err != nil {
-			if err.Error() == "context canceled" {
-				k.logger().Error("Context canceled waiting for Ingress to be ready")
-			} else if err.Error() == "context deadline exceeded" {
-				k.logger().Error("Timed out waiting for Ingress to be ready")
-			} else {
-				k.logger().Error("Error waiting for Ingress to be ready:", err)
-			}
-			return err
+			return fmt.Errorf("waiting for Ingress to be ready: %w", err)
 		}
 	}
 	return nil

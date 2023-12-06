@@ -249,17 +249,7 @@ func (c *CertManager) createCert(ctx context.Context, cert certificates) error {
 	})
 
 	if err != nil {
-		if err.Error() == "context canceled" {
-			c.Logger().Error("Context canceled waiting for RootCA secret to be ready")
-			c.Chatwork.AddMessage("Context canceled waiting for RootCA secret to be ready")
-		} else if err.Error() == "context deadline exceeded" {
-			c.Logger().Error("Timed out waiting for RootCA secret to be ready")
-			c.Chatwork.AddMessage("Timed out waiting for RootCA secret to be ready")
-		} else {
-			c.Logger().Error("Error waiting for RootCA secret to be ready:", err)
-			c.Chatwork.AddMessage(fmt.Sprintf("Error waiting for RootCA secret to be ready: %s\n", err))
-		}
-		return err
+		return fmt.Errorf("waiting for RootCA secret to be ready: %w", err)
 	}
 
 	//Create Issuer
@@ -289,17 +279,7 @@ func (c *CertManager) createCert(ctx context.Context, cert certificates) error {
 	})
 
 	if err != nil {
-		if err.Error() == "context canceled" {
-			c.Logger().Error("Context canceled waiting for Certificate secret to be ready")
-			c.Chatwork.AddMessage("Context canceled waiting for Certificate secret to be ready")
-		} else if err.Error() == "context deadline exceeded" {
-			c.Logger().Error("Timed out waiting for Certificate secret to be ready")
-			c.Chatwork.AddMessage("Timed out waiting for Certificate secret to be ready")
-		} else {
-			c.Logger().Error("Error waiting for Certificate secret to be ready:", err)
-			c.Chatwork.AddMessage(fmt.Sprintf("Error waiting for Certificate secret to be ready: %s\n", err))
-		}
-		return err
+		return fmt.Errorf("waiting for Certificate secret to be ready: %w", err)
 	}
 
 	return nil
