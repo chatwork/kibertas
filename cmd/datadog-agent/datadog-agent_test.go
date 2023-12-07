@@ -17,7 +17,7 @@ func TestNewDatadogAgent(t *testing.T) {
 		return logrus.NewEntry(logrus.New())
 	}
 	chatwork := &notify.Chatwork{}
-	checker := cmd.NewChecker(context.TODO(), false, logger, chatwork, 3*time.Minute)
+	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, 3*time.Minute)
 	datadogAgent, err := NewDatadogAgent(checker)
 	if err != nil {
 		t.Fatalf("NewDatadogAgent: %s", err)
@@ -36,7 +36,7 @@ func TestCheck(t *testing.T) {
 
 	chatwork := &notify.Chatwork{ApiToken: "token", RoomId: "test", Logger: logger}
 	datadogAgent := &DatadogAgent{
-		Checker:      cmd.NewChecker(context.TODO(), false, logger, chatwork, 1*time.Minute),
+		Checker:      cmd.NewChecker(context.Background(), false, logger, chatwork, 1*time.Minute),
 		ApiKey:       "",
 		AppKey:       "",
 		QueryMetrics: "",
@@ -54,7 +54,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	datadogAgent = &DatadogAgent{
-		Checker:      cmd.NewChecker(context.TODO(), false, logger, chatwork, 3*time.Minute),
+		Checker:      cmd.NewChecker(context.Background(), false, logger, chatwork, 3*time.Minute),
 		ApiKey:       "test",
 		AppKey:       "test",
 		QueryMetrics: "avg:kubernetes.cpu.user.total",
