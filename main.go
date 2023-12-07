@@ -228,8 +228,8 @@ func newSignalContext(logger func() *logrus.Entry, chatwork *notify.Chatwork) co
 
 	go func() {
 		<-c
-		logger().Info("Received Ctrl+C. Exiting...")
-		chatwork.AddMessage("Received Ctrl+C. Exiting...\n")
+		logger().Info("Received Ctrl+C or SIGTERM. Exiting...")
+		chatwork.AddMessage("Received Ctrl+C or SIGERM. Exiting...\n")
 		cancel()
 	}()
 
