@@ -21,7 +21,7 @@ type ClusterAutoscaler struct {
 	*cmd.Checker
 	Clientset      *kubernetes.Clientset
 	Namespace      string
-	DeploymentName string
+	ResourceName   string
 	ReplicaCount   int
 	NodeLabelKey   string
 	NodeLabelValue string
@@ -35,12 +35,12 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 	checker.Logger().Infof("cluster-autoscaler check application namespace: %s", namespace)
 	checker.Chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
 
-	deploymentName := "sample-for-scale"
+	resourceName := "sample-for-scale"
 	nodeLabelKey := "eks.amazonaws.com/capacityType"
 	nodeLabelValue := "SPOT"
 
-	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
-		deploymentName = v
+	if v := os.Getenv("RESOURCE_NAME"); v != "" {
+		resourceName = v
 	}
 
 	if v := os.Getenv("NODE_LABEL_KEY"); v != "" {
@@ -60,7 +60,7 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 		Checker:        checker,
 		Clientset:      k8sclientset,
 		Namespace:      namespace,
-		DeploymentName: deploymentName,
+		ResourceName:   resourceName,
 		NodeLabelKey:   nodeLabelKey,
 		NodeLabelValue: nodeLabelValue,
 	}, nil
@@ -132,7 +132,7 @@ func (c *ClusterAutoscaler) cleanUpResources() error {
 	k := k8s.NewK8s(c.Namespace, c.Clientset, c.Logger)
 	var result *multierror.Error
 	var err error
-	if err = k.DeleteDeployment(c.DeploymentName); err != nil {
+	if err = k.DeleteDeployment(c.ResourceName); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
 		result = multierror.Append(result, err)
 	}
@@ -147,19 +147,19 @@ func (c *ClusterAutoscaler) cleanUpResources() error {
 func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: c.DeploymentName,
+			Name: c.ResourceName,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: util.Int32Ptr(int32(c.ReplicaCount)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": c.DeploymentName,
+					"app": c.ResourceName,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": c.DeploymentName,
+						"app": c.ResourceName,
 					},
 				},
 				Spec: apiv1.PodSpec{
@@ -188,7 +188,7 @@ func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {
 											{
 												Key:      "app",
 												Operator: metav1.LabelSelectorOpIn,
-												Values:   []string{c.DeploymentName},
+												Values:   []string{c.ResourceName},
 											},
 										},
 									},

@@ -25,13 +25,13 @@ import (
 
 type Fluent struct {
 	*cmd.Checker
-	Namespace      string
-	Clientset      *kubernetes.Clientset
-	Env            string
-	LogBucketName  string
-	DeploymentName string
-	ReplicaCount   int
-	Awscfg         aws.Config
+	Namespace     string
+	Clientset     *kubernetes.Clientset
+	LogBucketName string
+	LogPath       string
+	ResourceName  string
+	ReplicaCount  int
+	Awscfg        aws.Config
 }
 
 func NewFluent(checker *cmd.Checker) (*Fluent, error) {
@@ -41,12 +41,14 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 	checker.Logger().Infof("fluent check application namespace: %s", namespace)
 	checker.Chatwork.AddMessage(fmt.Sprintf("fluent check application namespace: %s\n", namespace))
 
-	deploymentName := "burst-log-generator"
+	resourceName := "burst-log-generator"
+
 	env := "cwtest"
+
 	logBucketName := "cwtest-kubernetes-logs"
 
-	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
-		deploymentName = v
+	if v := os.Getenv("RESOURCE_NAME"); v != "" {
+		resourceName = v
 	}
 
 	if v := os.Getenv("ENV"); v != "" {
@@ -57,6 +59,13 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 		logBucketName = v
 	}
 
+	// path s3bucket/fluentd/env(test,stg,etc...)/namespace/dt=yyyymmdd
+	logPath := fmt.Sprintf("fluentd/%s/%s/dt=%d%02d%02d", env, namespace, t.UTC().Year(), t.UTC().Month(), t.UTC().Day())
+
+	if v := os.Getenv("LOG_PATH"); v != "" {
+		logPath = v
+	}
+
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
 		checker.Logger().Errorf("NewK8sClientset: %s", err)
@@ -64,13 +73,13 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 	}
 
 	return &Fluent{
-		Checker:        checker,
-		Namespace:      namespace,
-		Clientset:      k8sclient,
-		Env:            env,
-		DeploymentName: deploymentName,
-		LogBucketName:  logBucketName,
-		Awscfg:         config.NewAwsConfig(checker.Ctx),
+		Checker:       checker,
+		Namespace:     namespace,
+		Clientset:     k8sclient,
+		ResourceName:  resourceName,
+		LogBucketName: logBucketName,
+		LogPath:       logPath,
+		Awscfg:        config.NewAwsConfig(checker.Ctx),
 	}, nil
 }
 
@@ -90,8 +99,8 @@ func (f *Fluent) Check() error {
 	}
 
 	f.ReplicaCount = (len(nodes.Items) / 3) + 1
-	f.Logger().Infof("%s replica counts: %d", f.DeploymentName, f.ReplicaCount)
-	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d\n", f.DeploymentName, f.ReplicaCount))
+	f.Logger().Infof("%s replica counts: %d", f.ResourceName, f.ReplicaCount)
+	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d\n", f.ResourceName, f.ReplicaCount))
 
 	defer func() {
 		if err := f.cleanUpResources(); err != nil {
@@ -142,7 +151,7 @@ func (f *Fluent) cleanUpResources() error {
 	var result *multierror.Error
 	var err error
 
-	if err = k.DeleteDeployment(f.DeploymentName); err != nil {
+	if err = k.DeleteDeployment(f.ResourceName); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Deployment: %s", err))
 		result = multierror.Append(result, err)
 	}
@@ -158,7 +167,7 @@ func (f *Fluent) checkS3Object() error {
 	client := s3.NewFromConfig(f.Awscfg)
 	t := time.Now()
 	targetBucket := f.LogBucketName
-	targetPrefix := fmt.Sprintf("fluentd/%s/%s/dt=%d%02d%02d", f.Env, f.Namespace, t.UTC().Year(), t.UTC().Month(), t.UTC().Day())
+	targetPrefix := f.LogPath
 
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(targetBucket),
@@ -204,19 +213,19 @@ func (f *Fluent) createDeploymentObject() *appsv1.Deployment {
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: f.DeploymentName,
+			Name: f.ResourceName,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: util.Int32Ptr(int32(desireReplicacount)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": f.DeploymentName,
+					"app": f.ResourceName,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": f.DeploymentName,
+						"app": f.ResourceName,
 					},
 				},
 				Spec: apiv1.PodSpec{
@@ -247,7 +256,7 @@ func (f *Fluent) createDeploymentObject() *appsv1.Deployment {
 												{
 													Key:      "app",
 													Operator: metav1.LabelSelectorOpIn,
-													Values:   []string{f.DeploymentName},
+													Values:   []string{f.ResourceName},
 												},
 											},
 										},
