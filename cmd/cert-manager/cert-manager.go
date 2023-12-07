@@ -24,10 +24,10 @@ import (
 
 type CertManager struct {
 	*cmd.Checker
-	Namespace string
-	CertName  string
-	Clientset *kubernetes.Clientset
-	Client    client.Client
+	Namespace    string
+	ResourceName string
+	Clientset    *kubernetes.Clientset
+	Client       client.Client
 }
 
 type certificates struct {
@@ -43,10 +43,10 @@ func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 	checker.Logger().Infof("cert-manager check application namespace: %s", namespace)
 	checker.Chatwork.AddMessage(fmt.Sprintf("cert-manager check application namespace: %s\n", namespace))
 
-	certName := "sample"
+	resourceName := "sample"
 
-	if v := os.Getenv("CERT_NAME"); v != "" {
-		certName = v
+	if v := os.Getenv("RESOURCE_NAME"); v != "" {
+		resourceName = v
 	}
 
 	k8sclientset, err := config.NewK8sClientset()
@@ -64,11 +64,11 @@ func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 	}
 
 	return &CertManager{
-		Checker:   checker,
-		Namespace: namespace,
-		CertName:  certName,
-		Clientset: k8sclientset,
-		Client:    k8sclient,
+		Checker:      checker,
+		Namespace:    namespace,
+		ResourceName: resourceName,
+		Clientset:    k8sclientset,
+		Client:       k8sclient,
 	}, nil
 }
 
@@ -154,10 +154,10 @@ func (c *CertManager) cleanUpResources(cert certificates) error {
 }
 
 func (c *CertManager) createCertificateObject() certificates {
-	caName := c.CertName + "-ca"
-	caSecretName := c.CertName + "-tls"
-	issuerName := c.CertName + "-issuer"
-	certificateName := c.CertName + "-cert"
+	caName := c.ResourceName + "-ca"
+	caSecretName := c.ResourceName + "-tls"
+	issuerName := c.ResourceName + "-issuer"
+	certificateName := c.ResourceName + "-cert"
 	certificateSecretName := certificateName
 
 	rootCA := &cmapiv1.Certificate{
@@ -208,9 +208,9 @@ func (c *CertManager) createCertificateObject() certificates {
 				Kind: "Issuer",
 			},
 			DNSNames: []string{
-				c.CertName,
-				c.CertName + "." + c.Namespace + ".svc",
-				c.CertName + "." + c.Namespace + ".svc.cluster.local",
+				c.ResourceName,
+				c.ResourceName + "." + c.Namespace + ".svc",
+				c.ResourceName + "." + c.Namespace + ".svc.cluster.local",
 			},
 		},
 	}

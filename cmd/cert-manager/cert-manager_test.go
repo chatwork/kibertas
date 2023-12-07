@@ -59,11 +59,11 @@ func TestCheck(t *testing.T) {
 	now := time.Now()
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", now.Year(), now.Month(), now.Day(), util.GenerateRandomString(5))
 	cm := &CertManager{
-		Checker:   cmd.NewChecker(context.Background(), true, logger, chatwork, 3*time.Minute),
-		Namespace: namespace,
-		CertName:  "sample",
-		Clientset: k8sclientset,
-		Client:    k8sclient,
+		Checker:      cmd.NewChecker(context.Background(), true, logger, chatwork, 3*time.Minute),
+		Namespace:    namespace,
+		ResourceName: "sample",
+		Clientset:    k8sclientset,
+		Client:       k8sclient,
 	}
 
 	err = cm.Check()

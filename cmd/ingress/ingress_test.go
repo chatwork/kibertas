@@ -20,7 +20,7 @@ func TestNewIngress(t *testing.T) {
 		return logrus.NewEntry(logrus.New())
 	}
 	chatwork := &notify.Chatwork{}
-	checker := cmd.NewChecker(context.TODO(), false, logger, chatwork, 3*time.Minute)
+	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, 3*time.Minute)
 	ingress, err := NewIngress(checker, false, "alb")
 	if err != nil {
 		t.Fatalf("NewIngress: %s", err)
@@ -51,7 +51,7 @@ func TestCheck(t *testing.T) {
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
 	ingress := &Ingress{
-		Checker:          cmd.NewChecker(context.TODO(), true, logger, chatwork, 1*time.Minute),
+		Checker:          cmd.NewChecker(context.Background(), true, logger, chatwork, 1*time.Minute),
 		Namespace:        namespace,
 		Clientset:        k8sclient,
 		NoDnsCheck:       true,
@@ -81,7 +81,7 @@ func TestCheckDNSRecord(t *testing.T) {
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
 	ingress := &Ingress{
-		Checker:          cmd.NewChecker(context.TODO(), false, logger, chatwork, 1*time.Minute),
+		Checker:          cmd.NewChecker(context.Background(), false, logger, chatwork, 1*time.Minute),
 		Namespace:        "ingress-test",
 		Clientset:        k8sclient,
 		NoDnsCheck:       true,
