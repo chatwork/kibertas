@@ -4,15 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
 	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/k8s"
-	"github.com/chatwork/kibertas/util/notify"
-	"github.com/sirupsen/logrus"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
@@ -21,12 +18,15 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/hashicorp/go-multierror"
 )
 
 type Fluent struct {
 	*cmd.Checker
+	Namespace      string
+	Clientset      *kubernetes.Clientset
 	Env            string
 	LogBucketName  string
 	DeploymentName string
@@ -34,17 +34,16 @@ type Fluent struct {
 	Awscfg         aws.Config
 }
 
-func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwork) (*Fluent, error) {
+func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("fluent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	logger().Infof("fluent check application namespace: %s", namespace)
-	chatwork.AddMessage(fmt.Sprintf("fluent check application namespace: %s\n", namespace))
+	checker.Logger().Infof("fluent check application namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("fluent check application namespace: %s\n", namespace))
 
 	deploymentName := "burst-log-generator"
 	env := "cwtest"
 	logBucketName := "cwtest-kubernetes-logs"
-	timeout := 20
 
 	if v := os.Getenv("DEPLOYMENT_NAME"); v != "" {
 		deploymentName = v
@@ -58,27 +57,20 @@ func NewFluent(debug bool, logger func() *logrus.Entry, chatwork *notify.Chatwor
 		logBucketName = v
 	}
 
-	var err error
-	if v := os.Getenv("CHECK_TIMEOUT"); v != "" {
-		timeout, err = strconv.Atoi(v)
-		if err != nil {
-			logger().Errorf("strconv.Atoi: %s", err)
-			return nil, err
-		}
-	}
-
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
-		logger().Errorf("NewK8sClientset: %s", err)
+		checker.Logger().Errorf("NewK8sClientset: %s", err)
 		return nil, err
 	}
 
 	return &Fluent{
-		Checker:        cmd.NewChecker(namespace, k8sclient, debug, logger, chatwork, time.Duration(timeout)*time.Minute),
+		Checker:        checker,
+		Namespace:      namespace,
+		Clientset:      k8sclient,
 		Env:            env,
 		DeploymentName: deploymentName,
 		LogBucketName:  logBucketName,
-		Awscfg:         config.NewAwsConfig(),
+		Awscfg:         config.NewAwsConfig(checker.Ctx),
 	}, nil
 }
 
@@ -90,7 +82,7 @@ func (f *Fluent) Check() error {
 		LabelSelector: "eks.amazonaws.com/capacityType=SPOT",
 	}
 
-	nodes, err := f.Clientset.CoreV1().Nodes().List(context.TODO(), nodeListOption)
+	nodes, err := f.Clientset.CoreV1().Nodes().List(f.Ctx, nodeListOption)
 	if err != nil {
 		f.Logger().Errorf("Error List Nodes: %s", err)
 		f.Chatwork.AddMessage(fmt.Sprintf("Error List Nodes: %s\n", err))
@@ -101,17 +93,15 @@ func (f *Fluent) Check() error {
 	f.Logger().Infof("%s replica counts: %d", f.DeploymentName, f.ReplicaCount)
 	f.Chatwork.AddMessage(fmt.Sprintf("%s replica counts: %d\n", f.DeploymentName, f.ReplicaCount))
 
-	if err := f.createResources(); err != nil {
-		if err := f.cleanUpResources(); err != nil {
-			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
-		}
-		return err
-	}
 	defer func() {
 		if err := f.cleanUpResources(); err != nil {
 			f.Chatwork.AddMessage(fmt.Sprintf("Error Delete Resources: %s\n", err))
 		}
 	}()
+
+	if err := f.createResources(); err != nil {
+		return err
+	}
 
 	if err := f.checkS3Object(); err != nil {
 		return err
@@ -124,15 +114,17 @@ func (f *Fluent) Check() error {
 func (f *Fluent) createResources() error {
 	k := k8s.NewK8s(f.Namespace, f.Clientset, f.Logger)
 
-	if err := k.CreateNamespace(&apiv1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: f.Namespace,
-		}}); err != nil {
+	if err := k.CreateNamespace(
+		f.Ctx,
+		&apiv1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: f.Namespace,
+			}}); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 
-	if err := k.CreateDeployment(f.createDeploymentObject(), f.Timeout); err != nil {
+	if err := k.CreateDeployment(f.Ctx, f.createDeploymentObject(), f.Timeout); err != nil {
 		f.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
@@ -173,10 +165,10 @@ func (f *Fluent) checkS3Object() error {
 		Prefix: aws.String(targetPrefix),
 	}
 
-	err := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, f.Timeout, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(f.Ctx, 60*time.Second, f.Timeout, false, func(ctx context.Context) (bool, error) {
 		f.Logger().Infof("Wait fluentd output to s3://%s/%s ...", targetBucket, targetPrefix)
 
-		result, err := client.ListObjectsV2(context.TODO(), input)
+		result, err := client.ListObjectsV2(ctx, input)
 		if err != nil {
 			f.Logger().Error("Got an error retrieving items:", err)
 			return false, nil
@@ -199,9 +191,7 @@ func (f *Fluent) checkS3Object() error {
 	})
 
 	if err != nil {
-		f.Logger().Error("Timed out waiting for output S3 Object:", err)
-		f.Chatwork.AddMessage(fmt.Sprintf("Timed out waiting for output S3 Object: %s\n", err))
-		return err
+		return fmt.Errorf("error waiting for S3 objects to be ready: %w", err)
 	}
 
 	f.Logger().Infoln("All S3 Objects are available.")

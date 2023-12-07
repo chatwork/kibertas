@@ -1,4 +1,17 @@
 apiVersion: v1
+kind: Secret
+metadata:
+  name: kibertas-test
+  namespace: ops
+type: Opaque
+data:
+  dd-api-key: "dd api key"
+  dd-app-key: "dd app key"
+  cluster-name: "cluster name"
+  chatwork-room-id: "chatwork room id"
+  chatwork-api-token: "chatwork api token"
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: kibertas-test

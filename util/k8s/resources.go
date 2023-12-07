@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -29,8 +30,8 @@ func NewK8s(namespace string, clientset *kubernetes.Clientset, logger func() *lo
 }
 
 // Createは本当はApplyにしたいんだけど、ApplyがないのでCreateで代用
-func (k *K8s) CreateNamespace(ns *apiv1.Namespace) error {
-	_, err := k.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+func (k *K8s) CreateNamespace(ctx context.Context, ns *apiv1.Namespace) error {
+	_, err := k.clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	k.logger().Infof("Creating Namespace: %s", ns.Name)
 	if err != nil && kerrors.IsAlreadyExists(err) {
 		k.logger().Infof("Namespace %s already exists", ns.Name)
@@ -58,15 +59,15 @@ func (k *K8s) DeleteNamespace() error {
 	return nil
 }
 
-func (k *K8s) CreateDeployment(deployment *appsv1.Deployment, timeout time.Duration) error {
+func (k *K8s) CreateDeployment(ctx context.Context, deployment *appsv1.Deployment, timeout time.Duration) error {
 	deploymentsClient := k.clientset.AppsV1().Deployments(k.namespace)
 
 	// Create Deployment
 	k.logger().Infof("Creating Deployment: %s", deployment.Name)
-	result, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
+	result, err := deploymentsClient.Create(ctx, deployment, metav1.CreateOptions{})
 	if err != nil && kerrors.IsAlreadyExists(err) {
 		k.logger().Infof("Already exists, updating deployment: %s", deployment.Name)
-		_, err = deploymentsClient.Update(context.TODO(), deployment, metav1.UpdateOptions{})
+		_, err = deploymentsClient.Update(ctx, deployment, metav1.UpdateOptions{})
 		if err != nil {
 			k.logger().Error("Error Updating Deployment:", err)
 			return err
@@ -77,7 +78,7 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment, timeout time.Durat
 
 	k.logger().Infof("Created Deployment %s", result.GetObjectMeta().GetName())
 
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		deployment, err := deploymentsClient.Get(ctx, deployment.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -91,8 +92,7 @@ func (k *K8s) CreateDeployment(deployment *appsv1.Deployment, timeout time.Durat
 	})
 
 	if err != nil {
-		k.logger().Error("Timed out waiting for Pods to be ready:", err)
-		return err
+		return fmt.Errorf("waiting for Pods to be ready: %w", err)
 	}
 
 	k.logger().Infoln("All Pods are ready")
@@ -114,14 +114,14 @@ func (k *K8s) DeleteDeployment(deploymentName string) error {
 	return nil
 }
 
-func (k *K8s) CreateService(service *apiv1.Service) error {
+func (k *K8s) CreateService(ctx context.Context, service *apiv1.Service) error {
 	serviceClient := k.clientset.CoreV1().Services(k.namespace)
 
 	k.logger().Infof("Create service: %s", service.Name)
-	_, err := serviceClient.Create(context.TODO(), service, metav1.CreateOptions{})
+	_, err := serviceClient.Create(ctx, service, metav1.CreateOptions{})
 	if err != nil && kerrors.IsAlreadyExists(err) {
 		k.logger().Infof("Already exists, updating service: %s", service.Name)
-		_, err = serviceClient.Update(context.TODO(), service, metav1.UpdateOptions{})
+		_, err = serviceClient.Update(ctx, service, metav1.UpdateOptions{})
 		if err != nil {
 			k.logger().Error("Error updating service:", err)
 			return err
@@ -149,14 +149,14 @@ func (k *K8s) DeleteService(serviceName string) error {
 	return nil
 }
 
-func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, timeout time.Duration) error {
+func (k *K8s) CreateIngress(ctx context.Context, ingress *networkingv1.Ingress, timeout time.Duration) error {
 	ingressClient := k.clientset.NetworkingV1().Ingresses(k.namespace)
 
 	k.logger().Infof("Creating ingress: %s", ingress.Name)
-	_, err := ingressClient.Create(context.TODO(), ingress, metav1.CreateOptions{})
+	_, err := ingressClient.Create(ctx, ingress, metav1.CreateOptions{})
 	if err != nil && kerrors.IsAlreadyExists(err) {
 		k.logger().Infof("Already exists, updating ingress: %s", ingress.Name)
-		_, err = ingressClient.Update(context.TODO(), ingress, metav1.UpdateOptions{})
+		_, err = ingressClient.Update(ctx, ingress, metav1.UpdateOptions{})
 		if err != nil {
 			k.logger().Error("Error updating ingress:", err)
 			return err
@@ -167,7 +167,7 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, timeout time.Duration
 	}
 
 	if *ingress.Spec.IngressClassName == "alb" {
-		err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
+		err = wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 			ingress, err := ingressClient.Get(ctx, ingress.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
@@ -184,8 +184,7 @@ func (k *K8s) CreateIngress(ingress *networkingv1.Ingress, timeout time.Duration
 		})
 
 		if err != nil {
-			k.logger().Error("Timed out waiting for ingress to be ready:", err)
-			return err
+			return fmt.Errorf("waiting for Ingress to be ready: %w", err)
 		}
 	}
 	return nil
