@@ -33,21 +33,30 @@ type Ingress struct {
 	ExternalHostname string
 }
 
-func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) (*Ingress, error) {
+func NewIngress(checker *cmd.Checker, noDnsCheck bool) (*Ingress, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
+
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
+
 	checker.Logger().Infof("Ingress check application Namespace: %s", namespace)
 	checker.Chatwork.AddMessage(fmt.Sprintf("Ingress check application Namespace: %s\n", namespace))
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
+	ingressClassName := "alb"
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
 	}
 	if v := os.Getenv("EXTERNAL_HOSTNAME"); v != "" {
 		externalHostName = v
+	}
+
+	if v := os.Getenv("INGRESS_CLASS_NAME"); v != "" {
+		ingressClassName = v
 	}
 
 	k8sclient, err := config.NewK8sClientset()

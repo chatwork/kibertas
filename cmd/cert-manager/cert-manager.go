@@ -40,14 +40,18 @@ func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	checker.Logger().Infof("cert-manager check application Namespace: %s", namespace)
-	checker.Chatwork.AddMessage(fmt.Sprintf("cert-manager check application Namespace: %s\n", namespace))
+	location, _ := time.LoadLocation("Asia/Tokyo")
 
 	resourceName := "sample"
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
 	}
+
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
+
+	checker.Logger().Infof("cert-manager check application Namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("cert-manager check application Namespace: %s\n", namespace))
 
 	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {

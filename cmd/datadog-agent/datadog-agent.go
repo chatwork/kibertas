@@ -37,10 +37,13 @@ func NewDatadogAgent(checker *cmd.Checker) (*DatadogAgent, error) {
 		appKey = v
 	}
 
-	queryMetrics = "avg:kubernetes.cpu.user.total"
+	queryMetrics = "avg:kubernetes.cpu.user.total{*}"
 	if v := os.Getenv("QUERY_METRICS"); v != "" {
 		queryMetrics = v
 	}
+
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
 
 	return &DatadogAgent{
 		Checker:      checker,

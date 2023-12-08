@@ -24,7 +24,7 @@ func TestNewCertManager(t *testing.T) {
 		return logrus.NewEntry(logrus.New())
 	}
 	chatwork := &notify.Chatwork{}
-	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, 3*time.Minute)
+	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 3*time.Minute)
 	ingress, err := NewCertManager(checker)
 	if err != nil {
 		t.Fatalf("NewCertManager: %s", err)
@@ -59,7 +59,7 @@ func TestCheck(t *testing.T) {
 	now := time.Now()
 	namespace := fmt.Sprintf("cert-manager-test-%d%02d%02d-%s", now.Year(), now.Month(), now.Day(), util.GenerateRandomString(5))
 	cm := &CertManager{
-		Checker:      cmd.NewChecker(context.Background(), true, logger, chatwork, 3*time.Minute),
+		Checker:      cmd.NewChecker(context.Background(), true, logger, chatwork, "test", 3*time.Minute),
 		Namespace:    namespace,
 		ResourceName: "sample",
 		Clientset:    k8sclientset,

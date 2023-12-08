@@ -38,6 +38,10 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("fluent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
+
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
+
 	checker.Logger().Infof("fluent check application Namespace: %s", namespace)
 	checker.Chatwork.AddMessage(fmt.Sprintf("fluent check application Namespace: %s\n", namespace))
 
