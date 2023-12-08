@@ -37,8 +37,8 @@ func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) 
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	checker.Logger().Infof("ingress check application namespace: %s", namespace)
-	checker.Chatwork.AddMessage(fmt.Sprintf("ingress check application namespace: %s\n", namespace))
+	checker.Logger().Infof("Ingress check application Namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("Ingress check application Namespace: %s\n", namespace))
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
@@ -68,7 +68,7 @@ func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) 
 }
 
 func (i *Ingress) Check() error {
-	i.Chatwork.AddMessage("ingress check start\n")
+	i.Chatwork.AddMessage("Ingress check start\n")
 	defer i.Chatwork.Send()
 
 	defer func() {
@@ -90,7 +90,7 @@ func (i *Ingress) Check() error {
 		}
 	}
 
-	i.Chatwork.AddMessage("ingress check finished\n")
+	i.Chatwork.AddMessage("Ingress check finished\n")
 	return nil
 }
 
@@ -267,25 +267,24 @@ func (i *Ingress) checkDNSRecord() error {
 	c := new(dns.Client)
 	m := new(dns.Msg)
 
-	i.Chatwork.AddMessage("ingress create finished\n")
-	i.Logger().Println("Check DNS Record for: ", i.ExternalHostname)
+	i.Logger().Infof("Check DNS Record for: %s", i.ExternalHostname)
 	err := wait.PollUntilContextTimeout(i.Ctx, 30*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
 		m.SetQuestion(dns.Fqdn(i.ExternalHostname), dns.TypeA)
 		r, _, err := c.Exchange(m, "8.8.8.8:53")
 
 		if err != nil {
-			i.Logger().Println(err)
+			i.Logger().Warn(err)
 			return false, nil
 		}
 
 		if len(r.Answer) == 0 {
-			i.Logger().Println("No record.")
+			i.Logger().Info("No record.")
 			return false, nil
 		}
 
 		for _, ans := range r.Answer {
 			if a, ok := ans.(*dns.A); ok {
-				i.Logger().Println("Record is available:", a.A)
+				i.Logger().Infof("Record is available: %s", a.A)
 				i.Chatwork.AddMessage(fmt.Sprintf("Record is available: %s\n", a.A))
 				return true, nil
 			}
