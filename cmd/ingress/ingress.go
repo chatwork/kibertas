@@ -33,15 +33,20 @@ type Ingress struct {
 	ExternalHostname string
 }
 
-func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) (*Ingress, error) {
+func NewIngress(checker *cmd.Checker, noDnsCheck bool) (*Ingress, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	checker.Logger().Infof("ingress check application namespace: %s", namespace)
-	checker.Chatwork.AddMessage(fmt.Sprintf("ingress check application namespace: %s\n", namespace))
+
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
+
+	checker.Logger().Infof("Ingress check application Namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("Ingress check application Namespace: %s\n", namespace))
 
 	resourceName := "sample"
 	externalHostName := "sample-skmt.cwtest.info"
+	ingressClassName := "alb"
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
@@ -50,10 +55,13 @@ func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) 
 		externalHostName = v
 	}
 
+	if v := os.Getenv("INGRESS_CLASS_NAME"); v != "" {
+		ingressClassName = v
+	}
+
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
-		checker.Logger().Errorf("NewK8sClientset: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("error NewK8sClientset: %s", err)
 	}
 
 	return &Ingress{
@@ -68,7 +76,7 @@ func NewIngress(checker *cmd.Checker, noDnsCheck bool, ingressClassName string) 
 }
 
 func (i *Ingress) Check() error {
-	i.Chatwork.AddMessage("ingress check start\n")
+	i.Chatwork.AddMessage("Ingress check start\n")
 	defer i.Chatwork.Send()
 
 	defer func() {
@@ -90,7 +98,7 @@ func (i *Ingress) Check() error {
 		}
 	}
 
-	i.Chatwork.AddMessage("ingress check finished\n")
+	i.Chatwork.AddMessage("Ingress check finished\n")
 	return nil
 }
 
@@ -103,19 +111,19 @@ func (i *Ingress) createResources() error {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: i.Namespace,
 			}}); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 	if err := k.CreateDeployment(i.Ctx, i.createDeploymentObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
 	if err := k.CreateService(i.Ctx, i.createServiceObject()); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s\n", err))
 		return err
 	}
 	if err := k.CreateIngress(i.Ctx, i.createIngressObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s\n", err))
 		return err
 	}
 	return nil
@@ -267,25 +275,24 @@ func (i *Ingress) checkDNSRecord() error {
 	c := new(dns.Client)
 	m := new(dns.Msg)
 
-	i.Chatwork.AddMessage("ingress create finished\n")
-	i.Logger().Println("Check DNS Record for: ", i.ExternalHostname)
+	i.Logger().Infof("Check DNS Record for: %s", i.ExternalHostname)
 	err := wait.PollUntilContextTimeout(i.Ctx, 30*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
 		m.SetQuestion(dns.Fqdn(i.ExternalHostname), dns.TypeA)
 		r, _, err := c.Exchange(m, "8.8.8.8:53")
 
 		if err != nil {
-			i.Logger().Println(err)
+			i.Logger().Warn(err)
 			return false, nil
 		}
 
 		if len(r.Answer) == 0 {
-			i.Logger().Println("No record.")
+			i.Logger().Info("No record.")
 			return false, nil
 		}
 
 		for _, ans := range r.Answer {
 			if a, ok := ans.(*dns.A); ok {
-				i.Logger().Println("Record is available:", a.A)
+				i.Logger().Infof("Record is available: %s", a.A)
 				i.Chatwork.AddMessage(fmt.Sprintf("Record is available: %s\n", a.A))
 				return true, nil
 			}

@@ -38,8 +38,12 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("fluent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
-	checker.Logger().Infof("fluent check application namespace: %s", namespace)
-	checker.Chatwork.AddMessage(fmt.Sprintf("fluent check application namespace: %s\n", namespace))
+
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
+
+	checker.Logger().Infof("fluent check application Namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("fluent check application Namespace: %s\n", namespace))
 
 	resourceName := "burst-log-generator"
 
@@ -68,8 +72,12 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
-		checker.Logger().Errorf("NewK8sClientset: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("NewK8sClientset: %s", err)
+	}
+
+	awsConfig, err := config.NewAwsConfig(checker.Ctx)
+	if err != nil {
+		return nil, fmt.Errorf("NewAwsConfig: %s", err)
 	}
 
 	return &Fluent{
@@ -79,7 +87,7 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 		ResourceName:  resourceName,
 		LogBucketName: logBucketName,
 		LogPath:       logPath,
-		Awscfg:        config.NewAwsConfig(checker.Ctx),
+		Awscfg:        awsConfig,
 	}, nil
 }
 
@@ -179,7 +187,7 @@ func (f *Fluent) checkS3Object() error {
 
 		result, err := client.ListObjectsV2(ctx, input)
 		if err != nil {
-			f.Logger().Error("Got an error retrieving items:", err)
+			f.Logger().Warnf("Got an error retrieving items: %s", err)
 			return false, nil
 		}
 
@@ -187,10 +195,10 @@ func (f *Fluent) checkS3Object() error {
 			for _, item := range result.Contents {
 				if item.LastModified.After(t) {
 					f.Chatwork.AddMessage(fmt.Sprintf("fluentd output to s3://%s/%s/%s\n", targetBucket, targetPrefix, *item.Key))
-					f.Logger().Println("Name:          ", *item.Key)
-					f.Logger().Println("Last modified: ", *item.LastModified)
-					f.Logger().Println("Size:          ", item.Size)
-					f.Logger().Println("Storage class: ", item.StorageClass)
+					f.Logger().Infof("Name: %s ", *item.Key)
+					f.Logger().Infof("Last modified: %s", *item.LastModified)
+					f.Logger().Infof("Size: %d", item.Size)
+					f.Logger().Infof("Storage class: %s", item.StorageClass)
 					return true, nil
 				}
 			}
@@ -203,7 +211,7 @@ func (f *Fluent) checkS3Object() error {
 		return fmt.Errorf("error waiting for S3 objects to be ready: %w", err)
 	}
 
-	f.Logger().Infoln("All S3 Objects are available.")
+	f.Logger().Info("All S3 Objects are available.")
 
 	return nil
 }

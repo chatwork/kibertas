@@ -32,8 +32,10 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 
 	namespace := fmt.Sprintf("cluster-autoscaler-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
 
-	checker.Logger().Infof("cluster-autoscaler check application namespace: %s", namespace)
-	checker.Chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application namespace: %s\n", namespace))
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
+	checker.Logger().Infof("cluster-autoscaler check application Namespace: %s", namespace)
+	checker.Chatwork.AddMessage(fmt.Sprintf("cluster-autoscaler check application Namespace: %s\n", namespace))
 
 	resourceName := "sample-for-scale"
 	nodeLabelKey := "eks.amazonaws.com/capacityType"
@@ -53,7 +55,7 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 
 	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {
-		checker.Logger().Fatal("Error NewK8sClientset: ", err)
+		return nil, fmt.Errorf("error NewK8sClientset: %s", err)
 	}
 
 	return &ClusterAutoscaler{

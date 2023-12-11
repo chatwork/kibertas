@@ -43,6 +43,7 @@ func (c *Chatwork) AddMessage(message string) {
 // https://developer.chatwork.com/ja/endpoint_rooms.html#POST-rooms-room_id-messages
 // エラーが起きても問題ないので、エラーはログに出力するだけ
 func (c *Chatwork) Send() {
+	defer c.Messages.Reset()
 	// APIのURLを作成
 	apiUrl := fmt.Sprintf("https://api.chatwork.com/v2/rooms/%s/messages", c.RoomId)
 

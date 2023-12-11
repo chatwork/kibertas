@@ -37,10 +37,13 @@ func NewDatadogAgent(checker *cmd.Checker) (*DatadogAgent, error) {
 		appKey = v
 	}
 
-	queryMetrics = "avg:kubernetes.cpu.user.total"
+	queryMetrics = "avg:kubernetes.cpu.user.total{*}"
 	if v := os.Getenv("QUERY_METRICS"); v != "" {
 		queryMetrics = v
 	}
+
+	location, _ := time.LoadLocation("Asia/Tokyo")
+	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
 
 	return &DatadogAgent{
 		Checker:      checker,
@@ -104,18 +107,18 @@ func (d *DatadogAgent) checkMetrics() error {
 			} else if r != nil && r.StatusCode == 401 {
 				return true, errors.New("401 Unauthorized")
 			}
-			d.Logger().Errorf("Error when querying metrics: %v", err)
+			d.Logger().Warnf("Error when querying metrics: %v", err)
 			return false, err
 		}
 
 		if len(resp.GetSeries()) == 0 {
-			d.Logger().Infof("No results found")
+			d.Logger().Info("No results found")
 			return false, nil
 		} else if len(resp.GetSeries()) > 0 {
-			d.Logger().Infof("Response from `MetricsApi.QueryMetrics`")
+			d.Logger().Info("Response from `MetricsApi.QueryMetrics`")
 			d.Chatwork.AddMessage("Response from `MetricsApi.QueryMetrics`\n")
 			responseContent, _ := json.MarshalIndent(resp, "", "  ")
-			d.Logger().Debugf("Response:%s", responseContent)
+			d.Logger().Debugf("Response: %s", responseContent)
 			return true, nil
 		}
 
