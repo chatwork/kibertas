@@ -1,55 +1,55 @@
 # kibertas
 
-kibertas Kubernetes E2E はKubernetes環境のE2Eを実現するための、CLIツールです。
-ただし、Kubernetes本体のE2Eは行いません。
+kibertas is a CLI tool for achieving end-to-end (E2E) testing of Kubernetes environments. However, it does not perform E2E testing of the Kubernetes core itself.
 
-具体的には、現時点では、Kubernetesの運用に必要な下記のツールのE2Eに対応しています。
+Specifically, at the moment, it supports E2E testing of the following tools necessary for Kubernetes operations:
 
 - [cluster autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler)
 - Ingress
-  - 主に[aws-load-balancer-controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.6/)
+    - [aws-load-balancer-controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.6/)
 - [ExternalDNS](https://github.com/kubernetes-sigs/external-dns)
 - [cert-manager](https://cert-manager.io/)
 - [datadog-agent](https://github.com/DataDog/datadog-agent)
+- [fluentd](https://github.com/fluent/fluentd)
+  - with S3 Output
 
-Kubernetes自体のE2Eは[SONOBUOY](https://sonobuoy.io/)のcertified-conformanceでクラスタとして満たすべき機能を確認してください。
+For E2E testing of Kubernetes itself, please refer to the `certified-conformance` of [SONOBUOY](https://sonobuoy.io/) to verify the functionality that a cluster should meet.
 
-また、本ツールはSONOBUOYのpluginではなく、独自の実装です。
+Also, this tool is not a plugin for SONOBUOY, but a original implementation.
 
-## なぜ独自の実装にしたのか
+## Why not use SONOBUOY Plugin?
 
-- SONOBUOY pluginも検討したが、SONOBUOY自体の動かし方や、plugin.yamlの書き方などが、Chatworkで求める簡易的なE2Eより大柄だったため
-- 作りたかったから
+- Considered SONOBUOY plugin, but it was larger in terms of how to run SONOBUOY itself and how to write plugin.yaml than the simple E2E testing desired by us.
+- Because we wanted to create it.☺️
 
-# ローカルでのテスト方法
+# How to test locally
 
-[kind](https://github.com/kubernetes-sigs/kind)を予め起動し、ingress-nginx, cert-managerをapplyする必要があります。
+You need to start [kind](https://github.com/kubernetes-sigs/kind) in advance and apply ingress-nginx and cert-manager.
 
 ```
 $ kind create cluster
 $ make apply-cert-manager
-$ make apply-igress-nginx
+$ make apply-ingress-nginx
 ```
 
-各種起動したら、
-```
-$ make test
-```
-を実行してください。ただし、現時点ではすべての対象のテストが実現できていません。
+At the moment, not all target tests have been implemented.
 
-# ローカルでの実行方法
+# How to execute locallity
 
-CLIツールなので、ローカルからも実行可能です。ビルドしたら、helpコマンドで確認してください。
+You need build command.
 
 ```
 $ make build
-$ ./dist/kibertas test -h
 ```
 
-たとえば、対象のクラスタのcert-managerのテストを実行するには、
+and you can execute `kibertas`, example for cert-manager.
 
 ```
 $ ./dist/kibertas test cert-manager
 ```
 
-を実行してください。
+You can coniform this tools options with help command.
+
+```
+$ ./dist/kibertas test help
+```
