@@ -2,21 +2,22 @@ package config
 
 import (
 	"context"
-	"log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-func NewAwsConfig(ctx context.Context) aws.Config {
+func NewAwsConfig(ctx context.Context) (aws.Config, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		log.Printf("unable to load SDK config: %v", err)
+		return aws.Config{}, err
 	}
-	return cfg
+	return cfg, nil
 }
 
 func NewK8sClientset() (*kubernetes.Clientset, error) {
@@ -27,18 +28,19 @@ func NewK8sClientset() (*kubernetes.Clientset, error) {
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Printf("error kubernetes NewForConfig: %v", err)
 		return nil, err
 	}
 	return clientset, nil
 }
 
 func NewK8sClient(options client.Options) (client.Client, error) {
+	// https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/log/log.go#L58
+	log.SetLogger(zap.New(zap.UseDevMode(true)))
+
 	config := ctrl.GetConfigOrDie()
 	c, err := client.New(config, options)
 
 	if err != nil {
-		log.Printf("error kubernetes client: %v", err)
 		return nil, err
 	}
 	return c, nil

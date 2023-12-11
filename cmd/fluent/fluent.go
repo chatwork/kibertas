@@ -76,6 +76,12 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 		return nil, err
 	}
 
+	awsConfig, err := config.NewAwsConfig(checker.Ctx)
+	if err != nil {
+		checker.Logger().Errorf("NewAwsConfig: %s", err)
+		return nil, err
+	}
+
 	return &Fluent{
 		Checker:       checker,
 		Namespace:     namespace,
@@ -83,7 +89,7 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 		ResourceName:  resourceName,
 		LogBucketName: logBucketName,
 		LogPath:       logPath,
-		Awscfg:        config.NewAwsConfig(checker.Ctx),
+		Awscfg:        awsConfig,
 	}, nil
 }
 

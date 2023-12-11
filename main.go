@@ -19,7 +19,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
@@ -50,8 +49,9 @@ func main() {
 
 	var ctx context.Context
 
-	var ingressClassName string
 	var noDnsCheck bool
+
+	clusterName := os.Getenv("CLUSTER_NAME")
 
 	var rootCmd = &cobra.Command{
 		Use:           "kibertas",
@@ -73,7 +73,7 @@ func main() {
 		Short: "test cluster-autoscaler",
 		Long:  "test cluster-autoscaler",
 		RunE: func(cobra_cmd *cobra.Command, args []string) error {
-			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, clusterName, time.Duration(timeout)*time.Minute)
 			ca, err := clusterautoscaler.NewClusterAutoscaler(checker)
 			if err != nil {
 				return err
@@ -87,8 +87,8 @@ func main() {
 		Short: "test ingress",
 		Long:  "test ingress(ingress-controller, external-dns)",
 		RunE: func(cobra_cmd *cobra.Command, args []string) error {
-			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
-			i, err := ingress.NewIngress(checker, noDnsCheck, ingressClassName)
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, clusterName, time.Duration(timeout)*time.Minute)
+			i, err := ingress.NewIngress(checker, noDnsCheck)
 			if err != nil {
 				return err
 			}
@@ -101,7 +101,7 @@ func main() {
 		Short: "test fluent(fluent-bit, fluentd)",
 		Long:  "test fluent(fluent-bit, fluentd)",
 		RunE: func(cobra_cmd *cobra.Command, args []string) error {
-			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, clusterName, time.Duration(timeout)*time.Minute)
 			f, err := fluent.NewFluent(checker)
 			if err != nil {
 				return err
@@ -115,7 +115,7 @@ func main() {
 		Short: "test datadog-agent",
 		Long:  "test datadog-agent",
 		RunE: func(cobra_cmd *cobra.Command, args []string) error {
-			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, clusterName, time.Duration(timeout)*time.Minute)
 			da, err := datadogagent.NewDatadogAgent(checker)
 			if err != nil {
 				return err
@@ -129,7 +129,7 @@ func main() {
 		Short: "test cert-manager",
 		Long:  "test cert-manager",
 		RunE: func(cobra_cmd *cobra.Command, args []string) error {
-			checker = cmd.NewChecker(ctx, debug, logger, chatwork, time.Duration(timeout)*time.Minute)
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, clusterName, time.Duration(timeout)*time.Minute)
 			cm, err := certmanager.NewCertManager(checker)
 			if err != nil {
 				return err
@@ -138,56 +138,59 @@ func main() {
 		},
 	}
 
-	/*
-		var cmdAll = &cobra.Command{
-			Use:   "all",
-			Short: "test all application",
-			Long:  "test all application",
-			RunE: func(cmd *cobra.Command, args []string) error {
-				logger().Info("test all application")
-				i, err := ingress.NewIngress(debug, logger, chatwork, noDnsCheck, ingressClassName)
-				if err != nil {
-					return err
-				}
+	var cmdAll = &cobra.Command{
+		Use:   "all",
+		Short: "test all application",
+		Long:  "test all application",
+		RunE: func(cobra_cmd *cobra.Command, args []string) error {
+			logger().Info("test all application")
+			checker = cmd.NewChecker(ctx, debug, logger, chatwork, clusterName, time.Duration(timeout)*time.Minute)
+			ca, err := clusterautoscaler.NewClusterAutoscaler(checker)
+			if err != nil {
+				return err
+			}
+			if err := ca.Check(); err != nil {
+				return err
+			}
 
-				err = i.Check()
-				if err != nil {
-					return err
-				}
+			//checker.Chatwork = initChatwork(logger)
+			i, err := ingress.NewIngress(checker, false)
+			if err != nil {
+				return err
+			}
+			if err := i.Check(); err != nil {
+				return err
+			}
 
-				ca, err := clusterautoscaler.NewClusterAutoscaler(debug, logger, chatwork)
-				if err != nil {
-					return err
-				}
+			//checker.Chatwork = initChatwork(logger)
+			f, err := fluent.NewFluent(checker)
+			if err != nil {
+				return err
+			}
+			if err := f.Check(); err != nil {
+				return err
+			}
 
-				err = ca.Check()
-				if err != nil {
-					return err
-				}
+			//checker.Chatwork = initChatwork(logger)
+			da, err := datadogagent.NewDatadogAgent(checker)
+			if err != nil {
+				return err
+			}
+			if err := da.Check(); err != nil {
+				return err
+			}
 
-				cm, err := certmanager.NewCertManager(debug, logger, chatwork)
-				if err != nil {
-					return err
-				}
-
-				err = cm.Check()
-				if err != nil {
-					return err
-				}
-
-				f, err := fluent.NewFluent(debug, logger, chatwork)
-				if err != nil {
-					return err
-				}
-
-				err = f.Check()
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-		}
-	*/
+			//checker.Chatwork = initChatwork(logger)
+			cm, err := certmanager.NewCertManager(checker)
+			if err != nil {
+				return err
+			}
+			if err := cm.Check(); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
 
 	rootCmd.AddCommand(cmdTest)
 	rootCmd.PersistentFlags().IntVar(&timeout, "timeout", 15, "Check timeout. If you want to change the timeout, please specify the number of minutes.")
@@ -206,9 +209,8 @@ func main() {
 	ctx = newSignalContext(logger, chatwork)
 
 	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
-	cmdIngress.Flags().StringVar(&ingressClassName, "ingress-class-name", "alb", "This is a flag for the ingress class name. If you want to change the ingress class name, please specify the name.(default: alb)")
 
-	//cmdTest.AddCommand(cmdAll)
+	cmdTest.AddCommand(cmdAll)
 	cmdTest.AddCommand(cmdFluent)
 	cmdTest.AddCommand(cmdClusterAutoscaler)
 	cmdTest.AddCommand(cmdIngress)
@@ -216,6 +218,7 @@ func main() {
 	cmdTest.AddCommand(cmdDatadogAgent)
 
 	if err := rootCmd.Execute(); err != nil {
+		chatwork.AddMessage("Error: " + err.Error() + "\n")
 		logger().Fatal("Error: ", err)
 	}
 }
@@ -239,11 +242,8 @@ func newSignalContext(logger func() *logrus.Entry, chatwork *notify.Chatwork) co
 func initChatwork(logger func() *logrus.Entry) *notify.Chatwork {
 	apiToken := os.Getenv("CHATWORK_API_TOKEN")
 	roomId := os.Getenv("CHATWORK_ROOM_ID")
-	clusterName := os.Getenv("CLUSTER_NAME")
 	chatwork := notify.NewChatwork(apiToken, roomId, logger)
-	location, _ := time.LoadLocation("Asia/Tokyo")
 
-	chatwork.AddMessage(fmt.Sprintf("kibertas start in %s at %s\n", clusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
 	return chatwork
 }
 

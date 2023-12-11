@@ -54,6 +54,7 @@ func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 	checker.Chatwork.AddMessage(fmt.Sprintf("cert-manager check application Namespace: %s\n", namespace))
 
 	k8sclientset, err := config.NewK8sClientset()
+
 	if err != nil {
 		checker.Logger().Errorf("Error NewK8sClientset: %s ", err)
 	}
