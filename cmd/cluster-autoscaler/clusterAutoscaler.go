@@ -55,7 +55,7 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 
 	k8sclientset, err := config.NewK8sClientset()
 	if err != nil {
-		checker.Logger().Error("Error NewK8sClientset: ", err)
+		return nil, fmt.Errorf("error NewK8sClientset: %s", err)
 	}
 
 	return &ClusterAutoscaler{

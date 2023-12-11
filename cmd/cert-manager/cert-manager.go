@@ -56,7 +56,7 @@ func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 	k8sclientset, err := config.NewK8sClientset()
 
 	if err != nil {
-		checker.Logger().Errorf("Error NewK8sClientset: %s ", err)
+		return nil, fmt.Errorf("error NewK8sClientset: %s", err)
 	}
 
 	scheme := runtime.NewScheme()
@@ -64,8 +64,7 @@ func NewCertManager(checker *cmd.Checker) (*CertManager, error) {
 
 	k8sclient, err := config.NewK8sClient(client.Options{Scheme: scheme})
 	if err != nil {
-		checker.Logger().Errorf("NewK8sClient: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("error NewK8sClient: %s", err)
 	}
 
 	return &CertManager{

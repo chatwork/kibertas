@@ -206,6 +206,7 @@ func main() {
 	logger().Debug("log level: ", logLevel)
 
 	chatwork = initChatwork(logger)
+
 	ctx = newSignalContext(logger, chatwork)
 
 	cmdIngress.Flags().BoolVar(&noDnsCheck, "no-dns-check", false, "This is a flag for the dns check. If you want to skip the dns check, please specify false.(default: false)")
@@ -219,6 +220,7 @@ func main() {
 
 	if err := rootCmd.Execute(); err != nil {
 		chatwork.AddMessage("Error: " + err.Error() + "\n")
+		chatwork.Send()
 		logger().Fatal("Error: ", err)
 	}
 }

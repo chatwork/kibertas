@@ -61,8 +61,7 @@ func NewIngress(checker *cmd.Checker, noDnsCheck bool) (*Ingress, error) {
 
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
-		checker.Logger().Errorf("NewK8sClientset: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("error NewK8sClientset: %s", err)
 	}
 
 	return &Ingress{
@@ -112,19 +111,19 @@ func (i *Ingress) createResources() error {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: i.Namespace,
 			}}); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Namespace: %s\n", err))
 		return err
 	}
 	if err := k.CreateDeployment(i.Ctx, i.createDeploymentObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Deployment: %s\n", err))
 		return err
 	}
 	if err := k.CreateService(i.Ctx, i.createServiceObject()); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Service: %s\n", err))
 		return err
 	}
 	if err := k.CreateIngress(i.Ctx, i.createIngressObject(), i.Timeout); err != nil {
-		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s", err))
+		i.Chatwork.AddMessage(fmt.Sprintf("Error Create Ingress: %s\n", err))
 		return err
 	}
 	return nil

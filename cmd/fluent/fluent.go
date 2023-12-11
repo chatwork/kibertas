@@ -72,14 +72,12 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
-		checker.Logger().Errorf("NewK8sClientset: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("NewK8sClientset: %s", err)
 	}
 
 	awsConfig, err := config.NewAwsConfig(checker.Ctx)
 	if err != nil {
-		checker.Logger().Errorf("NewAwsConfig: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("NewAwsConfig: %s", err)
 	}
 
 	return &Fluent{
