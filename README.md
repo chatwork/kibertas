@@ -54,7 +54,7 @@ Now, run `kibertas`.
 $ ./dist/kibertas test cert-manager
 ```
 
-You can coniform this tools options with help command.
+For the complete list of available test targets and the options, run:
 
 ```
 $ ./dist/kibertas test help
