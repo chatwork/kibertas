@@ -44,7 +44,11 @@ Otherwise, you can clone this repository and build it yourself using `make`:
 $ make build
 ```
 
-and you can execute `kibertas`, example for cert-manager.
+Ensure that you have acess to the cluster, by setting `KUBECONFIG` envvar or properly configuring the default kubeconfig.
+
+Now, run `kibertas`.
+
+`kubertas` has sub-commands for respective test targets- For example, to test that the `cert-manager` on your cluster is working, run:
 
 ```
 $ ./dist/kibertas test cert-manager
