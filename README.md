@@ -36,7 +36,9 @@ At the moment, not all target tests have been implemented.
 
 # How to execute locallity
 
-You need build command.
+Grab the latest binary from [our GitHub releases page](https://github.com/chatwork/kibertas/releases).
+
+Otherwise, you can clone this repository and build it yourself using `make`:
 
 ```
 $ make build
