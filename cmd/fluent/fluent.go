@@ -38,6 +38,9 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 	t := time.Now()
 
 	namespace := fmt.Sprintf("fluent-test-%d%02d%02d-%s", t.Year(), t.Month(), t.Day(), util.GenerateRandomString(5))
+	if v := os.Getenv("RESOURCE_NAMESPACE"); v != "" {
+		namespace = v
+	}
 
 	location, _ := time.LoadLocation("Asia/Tokyo")
 	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
@@ -65,7 +68,6 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 
 	// path s3bucket/fluentd/env(test,stg,etc...)/namespace/dt=yyyymmdd
 	logPath := fmt.Sprintf("fluentd/%s/%s/dt=%d%02d%02d", env, namespace, t.UTC().Year(), t.UTC().Month(), t.UTC().Day())
-
 	if v := os.Getenv("LOG_PATH"); v != "" {
 		logPath = v
 	}
