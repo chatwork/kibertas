@@ -45,6 +45,7 @@ data "aws_vpc" "vpc" {
 
 resource "aws_s3_bucket" "bucket" {
     bucket = "${var.prefix}-bucket"
+    force_destroy = true
 }
 
 resource "aws_eks_cluster" "cluster" {

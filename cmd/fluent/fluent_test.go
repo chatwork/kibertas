@@ -128,7 +128,7 @@ func TestNewFluent(t *testing.T) {
 	chatwork := &notify.Chatwork{
 		Logger: logger,
 	}
-	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 5*time.Minute)
+	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 3*time.Minute)
 	fluent, err := NewFluent(checker)
 	if err != nil {
 		t.Fatalf("NewFluent: %s", err)
