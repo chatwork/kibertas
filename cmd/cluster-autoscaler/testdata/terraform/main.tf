@@ -37,6 +37,16 @@ variable "region" {
     description = "The region to use for this example"
 }
 
+variable "node_template_app_label_value" {
+    type = string
+    description = "The value to use for the app label in the cluster-autoscaler node template"
+}
+
+variable "capacity_type" {
+    type = string
+    description = "The capacity type to use for this example. Valid values are ON_DEMAND and SPOT"
+}
+
 // vpc cidr block
 data "aws_vpc" "vpc" {
     id = var.vpc_id
@@ -51,6 +61,29 @@ resource "aws_eks_cluster" "cluster" {
     }
 }
 
+// node group for system pods and cluster-autoscaler
+resource "aws_eks_node_group" "sys" {
+    cluster_name = aws_eks_cluster.cluster.name
+    node_group_name = "${var.prefix}-sys"
+    node_role_arn = aws_iam_role.node.arn
+    subnet_ids = aws_subnet.public[*].id
+    scaling_config {
+        desired_size = 2
+        max_size = 2
+        min_size = 2
+    }
+    capacity_type = "ON_DEMAND"
+    instance_types = ["t3.large"]
+    labels = {
+        "role" = "sys"
+    }
+    taint {
+        key = "node-role.kubernetes.io/control-plane"
+        value  = ""
+        effect = "NO_SCHEDULE"
+    }
+}
+
 // node group based on spot instances
 resource "aws_eks_node_group" "spot" {
     cluster_name = aws_eks_cluster.cluster.name
@@ -62,14 +95,15 @@ resource "aws_eks_node_group" "spot" {
         # We intend to let cluster-autoscaler discover the cluster and
         # this max_size, scaling nodes to 2.
         max_size = 3
-        min_size = 1
+        min_size = 0
     }
-    # capacity_type = "SPOT"
+    capacity_type = var.capacity_type
     instance_types = ["t3.large"]
     labels = {
         "role" = "spot"
     }
     tags =  {
+        "k8s.io/cluster-autoscaler/node-template/label/app": var.node_template_app_label_value,
         "k8s.io/cluster-autoscaler/enabled" = "true"
         "k8s.io/cluster-autoscaler/${aws_eks_cluster.cluster.name}" = "owned"
     }
