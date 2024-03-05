@@ -3,12 +3,14 @@ package certmanager
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	cmapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/chatwork/kibertas/util"
 	"github.com/chatwork/kibertas/util/notify"
+	"github.com/mumoshu/testkit"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +19,37 @@ import (
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
 )
+
+func TestMain(m *testing.M) {
+	h, err := testkit.Build(
+		testkit.Providers(
+			&testkit.KindProvider{},
+			&testkit.KubectlProvider{},
+		),
+		testkit.RetainResourcesOnFailure(),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to build test harness: %s", err)
+		os.Exit(1)
+	}
+
+	kcp, err := h.KubernetesClusterProvider()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get KubernetesClusterProvider: %s", err)
+		os.Exit(1)
+	}
+
+	kc, err := kcp.GetKubernetesCluster()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get KubernetesCluster: %s", err)
+		os.Exit(1)
+	}
+
+	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
+
+	code := m.Run()
+	os.Exit(code)
+}
 
 func TestNewCertManager(t *testing.T) {
 	t.Parallel()
@@ -37,6 +70,22 @@ func TestNewCertManager(t *testing.T) {
 
 func TestCheck(t *testing.T) {
 	t.Parallel()
+
+	helm := testkit.NewHelm(os.Getenv("KUBECONFIG"))
+	helm.AddRepo(t, "jetstack", "https://charts.jetstack.io")
+
+	certManagerNs := "default"
+	helm.UpgradeOrInstall(t, "cert-manager", "jetstack/cert-manager", func(hc *testkit.HelmConfig) {
+		hc.Values = map[string]interface{}{
+			"installCRDs": true,
+			"prometheus": map[string]interface{}{
+				"enabled": false,
+			},
+		}
+
+		hc.Namespace = certManagerNs
+	})
+
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
