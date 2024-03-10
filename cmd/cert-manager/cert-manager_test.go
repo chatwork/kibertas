@@ -48,6 +48,13 @@ func TestMain(m *testing.M) {
 	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
 
 	code := m.Run()
+
+	if h.CleanupNeeded(code != 0) {
+		if err := h.DoCleanup(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to cleanup test harness: %s", err)
+		}
+	}
+
 	os.Exit(code)
 }
 
@@ -84,6 +91,14 @@ func TestCheck(t *testing.T) {
 		}
 
 		hc.Namespace = certManagerNs
+	})
+
+	kubectl := testkit.NewKubectl(os.Getenv("KUBECONFIG"))
+	kubectl.Capture(t, "create", "-f", "testdata/clusterissuer.yaml")
+	t.Cleanup(func() {
+		if !t.Failed() {
+			kubectl.Capture(t, "delete", "-f", "testdata/clusterissuer.yaml")
+		}
 	})
 
 	logger := func() *logrus.Entry {

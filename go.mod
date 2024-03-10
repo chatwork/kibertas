@@ -10,7 +10,7 @@ require (
 	github.com/cert-manager/cert-manager v1.13.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/miekg/dns v1.1.57
-	github.com/mumoshu/testkit v0.8.4
+	github.com/mumoshu/testkit v0.9.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
