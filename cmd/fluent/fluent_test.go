@@ -108,7 +108,7 @@ func TestNewFluent(t *testing.T) {
 
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 	defer func() {
-		if h.CleanupNeeded(t) {
+		if h.CleanupNeeded(t.Failed()) {
 			kctl.Capture(t, "delete", "clusterrolebinding", fluentdClusterRoleBindingName)
 		}
 	}()
