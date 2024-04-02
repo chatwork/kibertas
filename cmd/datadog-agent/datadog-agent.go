@@ -73,15 +73,27 @@ func (d *DatadogAgent) Check() error {
 }
 
 func (d *DatadogAgent) checkMetrics() error {
-	keys := make(map[string]datadog.APIKey)
-	keys["apiKeyAuth"] = datadog.APIKey{Key: d.ApiKey}
-	keys["appKeyAuth"] = datadog.APIKey{Key: d.AppKey}
-
-	ddctx := datadog.NewDefaultContext(context.WithValue(
-		d.Ctx,
-		datadog.ContextAPIKeys,
-		keys,
-	))
+	// NewDefaultContext loads DD_API_KEY and DD_APP_KEY
+	// into apiKeyAuth and appKeyAuth respectively,
+	// and doing:
+	//
+	// datadog.NewDefaultContext(context.WithValue(
+	// 	ctx,
+	// 	datadog.ContextAPIKeys,
+	// 	keys,
+	// ))
+	//
+	// does not clear the apiKeyAuth and appKeyAuth values
+	// set by the NewDefaultContext function.
+	//
+	// So the choice is to use NewDefaultContext for loading
+	// environment variables or use context.WithValue for
+	// setting the API keys from DatadogAgent struct,
+	// but not both.
+	//
+	// As we already check for empty API keys before calling checkMetrics,
+	// let's use NewDefaultContext to load the environment variables.
+	ddctx := datadog.NewDefaultContext(d.Ctx)
 
 	configuration := datadog.NewConfiguration()
 	apiClient := datadog.NewAPIClient(configuration)
@@ -111,8 +123,13 @@ func (d *DatadogAgent) checkMetrics() error {
 			return false, err
 		}
 
+		if resp.Error != nil {
+			d.Logger().Warnf("Datadog API error: %s", *resp.Error)
+			return false, nil
+		}
+
 		if len(resp.GetSeries()) == 0 {
-			d.Logger().Info("No results found")
+			d.Logger().Infof("No results found: from=%d to=%d", from, now)
 			return false, nil
 		} else if len(resp.GetSeries()) > 0 {
 			d.Logger().Info("Response from `MetricsApi.QueryMetrics`")

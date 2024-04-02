@@ -59,3 +59,48 @@ For the complete list of available test targets and the options, run:
 ```
 $ ./dist/kibertas test help
 ```
+
+# How to test kibertas
+
+All the steps above have been for introducing how to use kibertas to test your apps and infrastructures.
+
+How can we test kibertas itself?
+
+It's a two-step process:
+
+- Set environment varibles
+- Run `go test`
+
+Some tests require access to external services like Datadog.
+
+You need to set corresponding environment variables before running the tests depending
+what you want to test.
+
+In case you want to run all the tests, ensure you have all the environment variables shown below set:
+
+```
+DD_API_KEY=...
+DD_APP_KEY=...
+
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+# Otherwise provide appropriate aws config, instance profile, or IAM role for SA
+```
+
+Now run everything:
+
+```
+go test ./...
+```
+
+Or run only a subset of the tests:
+
+```
+go test ./cmd/datadog-agent
+```
+
+Or even specify the targets via a regexp:
+
+```
+go test ./cmd/datadog-agent -test.run TestNewDatadogAgent
+```
