@@ -158,6 +158,19 @@ func (c *CertManager) cleanUpResources(cert certificates) error {
 }
 
 func (c *CertManager) createCertificateObject() certificates {
+	// This is the metadata.name of the root CA's
+	// Certificate resource.
+	//
+	// Note that a few other resources will be created
+	// with this name as a prefix.
+	//
+	// For example, the temporary Secret resource that stores the
+	// root CA's private key will be named like "<caName>-abcde" where
+	// "abcde" is a random suffix.
+	//
+	// Similarly, the CertificateRequest resource that cert-manager
+	// creates to sign the root CA's public key will be named like
+	// "<caName>-1".
 	caName := c.ResourceName + "-ca"
 	caSecretName := c.ResourceName + "-tls"
 	issuerName := c.ResourceName + "-issuer"
@@ -178,6 +191,12 @@ func (c *CertManager) createCertificateObject() certificates {
 				Size:      256,
 			},
 			IssuerRef: cmmeta.ObjectReference{
+				// This is the issuer used by cert-manager
+				// to issue the root CA's certificate denoted by
+				// this resource.
+				// This means that a ClusterIssuer resource with
+				// with name "selfsigned-issuer" should exist in the
+				// cluster before running the test.
 				Name:  "selfsigned-issuer",
 				Kind:  "ClusterIssuer",
 				Group: "cert-manager.io",
