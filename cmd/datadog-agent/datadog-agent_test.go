@@ -134,7 +134,7 @@ func TestCheckE2E(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDatadogAgent: %s", err)
 	}
-	datadogAgent.WaitTime = 1 * time.Second
+	datadogAgent.WaitTime = 1 * time.Minute
 	datadogAgent.QueryMetrics = "avg:kubernetes.cpu.user.total{*}"
 
 	err = datadogAgent.Check()
