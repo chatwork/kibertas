@@ -36,6 +36,10 @@ func TestNewIngress(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
 	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
