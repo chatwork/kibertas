@@ -57,6 +57,9 @@ ci\:enable\:k8s:
 	    chmod +x ./.bin/kubectl; \
 	fi
 	@sudo cp ./.bin/kubectl /usr/local/bin/kubectl;
+
+	@go install sigs.k8s.io/cloud-provider-kind@latest
+	@sudo install ~/go/bin/cloud-provider-kind /usr/local/bin
 	kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m;
 
 .PHONY: delete-kind
