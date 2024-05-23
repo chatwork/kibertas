@@ -94,7 +94,7 @@ func TestCheck(t *testing.T) {
 	})
 
 	kubectl := testkit.NewKubectl(os.Getenv("KUBECONFIG"))
-	kubectl.Capture(t, "create", "-f", "testdata/clusterissuer.yaml")
+	kubectl.Capture(t, "apply", "-f", "testdata/clusterissuer.yaml")
 	t.Cleanup(func() {
 		if !t.Failed() {
 			kubectl.Capture(t, "delete", "-f", "testdata/clusterissuer.yaml")
