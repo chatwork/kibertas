@@ -58,11 +58,13 @@ func TestCheck(t *testing.T) {
 	)
 
 	kc := h.KubernetesCluster(t)
+	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
 	// Start cloud-provider-kind to manage service type=LoadBalancer
 	//
 	// This requiers cloud-provider-kind to be installed in the PATH.
 	// Follow https://github.com/kubernetes-sigs/cloud-provider-kind?tab=readme-ov-file#install to install it.
+	kctl.Capture(t, "label", "node", "kind-control-plane", "node.kubernetes.io/exclude-from-external-load-balancers-")
 	bin, err := exec.LookPath("cloud-provider-kind")
 	if bin == "" {
 		t.Fatalf("cloud-provider-kind not found in PATH: %s", os.Getenv("PATH"))
@@ -86,8 +88,6 @@ func TestCheck(t *testing.T) {
 
 		hc.Namespace = ingressNginxNs
 	})
-
-	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
 	// Get the external IP of the ingress-nginx service
 	ingressNginxSvcLBIP := kctl.Capture(t, "get", "svc", "-n", ingressNginxNs, "my-ingress-nginx-controller", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}")
