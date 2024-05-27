@@ -41,7 +41,7 @@ goreleaser-snapshot:
 
 .PHONY: create-kind
 create-kind:
-	kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m;
+	kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m --config=./kind-config.yaml
 
 .PHONY: ci\:enable\:k8s
 ci\:enable\:k8s:
@@ -57,10 +57,7 @@ ci\:enable\:k8s:
 	    chmod +x ./.bin/kubectl; \
 	fi
 	@sudo cp ./.bin/kubectl /usr/local/bin/kubectl;
-
-	@go install sigs.k8s.io/cloud-provider-kind@latest
-	@sudo install ~/go/bin/cloud-provider-kind /usr/local/bin
-	kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m;
+	@kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m --config=./kind-config.yaml
 
 .PHONY: delete-kind
 delete-kind:
@@ -74,7 +71,7 @@ delete-kind:
 
 .PHONY: apply-ingress-nginx
 apply-ingress-nginx:
-	@kubectl apply --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
+	@kubectl apply --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml
 	@sleep 2
 	@kubectl -n ingress-nginx wait deploy -l app.kubernetes.io/instance=ingress-nginx --for=condition=available --timeout=60s
 

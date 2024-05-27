@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"syscall"
 	"testing"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"github.com/chatwork/kibertas/config"
 	"github.com/chatwork/kibertas/util/notify"
 	"github.com/mumoshu/testkit"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sirupsen/logrus"
 )
@@ -60,38 +58,7 @@ func TestCheck(t *testing.T) {
 	kc := h.KubernetesCluster(t)
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
-	// Start cloud-provider-kind to manage service type=LoadBalancer
-	//
-	// This requiers cloud-provider-kind to be installed in the PATH.
-	// Follow https://github.com/kubernetes-sigs/cloud-provider-kind?tab=readme-ov-file#install to install it.
-	kctl.Capture(t, "label", "node", "kind-control-plane", "node.kubernetes.io/exclude-from-external-load-balancers-")
-	bin, err := exec.LookPath("cloud-provider-kind")
-	if bin == "" {
-		t.Fatalf("cloud-provider-kind not found in PATH: %s", os.Getenv("PATH"))
-	}
-	require.NoError(t, err)
-
-	handle := StartProcess(t, bin)
-	defer handle.Stop(t)
-
-	helm := testkit.NewHelm(kc.KubeconfigPath)
-	// See https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler#tldr
-	helm.AddRepo(t, "ingress-nginx", "https://kubernetes.github.io/ingress-nginx")
-
-	ingressNginxNs := "default"
-	helm.UpgradeOrInstall(t, "my-ingress-nginx", "ingress-nginx/ingress-nginx", func(hc *testkit.HelmConfig) {
-		hc.Values = map[string]interface{}{
-			"rbac": map[string]interface{}{
-				"create": true,
-			},
-		}
-
-		hc.Namespace = ingressNginxNs
-	})
-
-	// Get the external IP of the ingress-nginx service
-	ingressNginxSvcLBIP := kctl.Capture(t, "get", "svc", "-n", ingressNginxNs, "my-ingress-nginx-controller", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}")
-	t.Logf("ingress-nginx service LB IP: %s", ingressNginxSvcLBIP)
+	kctl.Capture(t, "apply", "--wait=true", "-f", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml")
 
 	// We intentionally make the test namespace deterministic to avoid ingress path
 	// conflicts among test namespaces across test runs
@@ -114,7 +81,7 @@ func TestCheck(t *testing.T) {
 		IngressClassName:  "nginx",
 		ResourceName:      "sample",
 		ExternalHostname:  "sample.example.com",
-		HTTPCheckEndpoint: "http://" + ingressNginxSvcLBIP + "/",
+		HTTPCheckEndpoint: "http://localhost:8080/",
 	}
 
 	err = ingress.Check()
