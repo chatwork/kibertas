@@ -54,6 +54,13 @@ func TestIngressCheckE2E(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	kcfg, err := os.ReadFile(kc.KubeconfigPath)
+	if os.IsNotExist(err) {
+		t.Fatalf("Kubeconfig file not found: %s", kc.KubeconfigPath)
+	}
+	t.Logf("Kubeconfig file: %s", kc.KubeconfigPath)
+	t.Logf("Kubeconfig content: %s", string(kcfg))
+
 	handle := StartProcess(t, bin, kc.KubeconfigPath)
 	defer handle.Stop(t)
 
