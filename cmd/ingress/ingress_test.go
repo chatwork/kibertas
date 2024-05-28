@@ -64,7 +64,6 @@ func TestCheck(t *testing.T) {
 	//
 	// This requiers cloud-provider-kind to be installed in the PATH.
 	// Follow https://github.com/kubernetes-sigs/cloud-provider-kind?tab=readme-ov-file#install to install it.
-	kctl.Capture(t, "label", "node", "kind-control-plane", "node.kubernetes.io/exclude-from-external-load-balancers-")
 	bin, err := exec.LookPath("cloud-provider-kind")
 	if bin == "" {
 		t.Fatalf("cloud-provider-kind not found in PATH: %s", os.Getenv("PATH"))
