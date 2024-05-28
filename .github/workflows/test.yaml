@@ -23,10 +23,6 @@ jobs:
           check-latest: true
       - name: Creat kind
         run: make ci:enable:k8s
-      - name: Apply Cert Manager
-        run: make apply-cert-manager
-      - name: Apply Ingress-Nginx
-        run: make apply-ingress-nginx
       - name: Run tests
         run: make test
   golangci:
