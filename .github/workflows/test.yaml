@@ -32,8 +32,8 @@ jobs:
       - name: Check docker bridge mtu
         run: |
           docker network inspect bridge -f '{{ index .Options "com.docker.network.driver.mtu" }}'
-      - name: Creat kind
-        run: make ci:enable:k8s
+      - name: Install cloud-provider-kind
+        run: make cloud-provider-kind
       - name: Run tests
         run: make test
       - name: Run E2E tests
