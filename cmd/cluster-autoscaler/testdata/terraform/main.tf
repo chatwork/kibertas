@@ -52,8 +52,10 @@ data "aws_vpc" "vpc" {
     id = var.vpc_id
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_eks_cluster" "cluster" {
-    name = "${var.prefix}-cluster"
+    name = local.cluster_name
     role_arn = aws_iam_role.cluster.arn
     vpc_config {
         subnet_ids = aws_subnet.public[*].id
@@ -166,11 +168,131 @@ resource "aws_iam_role_policy_attachment" "ecr" {
     policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-// See https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/README.md#iam-policy
-resource "aws_iam_role_policy" "node" {
-    name = "${var.prefix}-node"
-    role = aws_iam_role.node.id
-    policy = <<EOF
+variable "autoscaler_name" {
+    type = string
+    description = "The name of the autoscaler to use. Valid values are karpenter and cluster-autoscaler"
+    default = "cluster-autoscaler"
+}
+
+locals {
+    cluster_name = "${var.prefix}-cluster"
+    aws_account_id = data.aws_caller_identity.current.account_id
+    node_policy_ka = <<EOF
+{
+    "Statement": [
+        {
+            "Action": [
+                "ssm:GetParameter",
+                "ec2:DescribeImages",
+                "ec2:RunInstances",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeLaunchTemplates",
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceTypes",
+                "ec2:DescribeInstanceTypeOfferings",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DeleteLaunchTemplate",
+                "ec2:CreateTags",
+                "ec2:CreateLaunchTemplate",
+                "ec2:CreateFleet",
+                "ec2:DescribeSpotPriceHistory",
+                "pricing:GetProducts"
+            ],
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "Karpenter"
+        },
+        {
+            "Action": "ec2:TerminateInstances",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/karpenter.sh/nodepool": "*"
+                }
+            },
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "ConditionalEC2Termination"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": "arn:aws:iam::${local.aws_account_id}:role/KarpenterNodeRole-${local.cluster_name}",
+            "Sid": "PassNodeIAMRole"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "eks:DescribeCluster",
+            "Resource": "arn:aws:eks:${var.region}:${local.aws_account_id}:cluster/${local.cluster_name}",
+            "Sid": "EKSClusterEndpointLookup"
+        },
+        {
+            "Sid": "AllowScopedInstanceProfileCreationActions",
+            "Effect": "Allow",
+            "Resource": "*",
+            "Action": [
+            "iam:CreateInstanceProfile"
+            ],
+            "Condition": {
+            "StringEquals": {
+                "aws:RequestTag/kubernetes.io/cluster/${local.cluster_name}": "owned",
+                "aws:RequestTag/topology.kubernetes.io/region": "${var.region}"
+            },
+            "StringLike": {
+                "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass": "*"
+            }
+            }
+        },
+        {
+            "Sid": "AllowScopedInstanceProfileTagActions",
+            "Effect": "Allow",
+            "Resource": "*",
+            "Action": [
+            "iam:TagInstanceProfile"
+            ],
+            "Condition": {
+            "StringEquals": {
+                "aws:ResourceTag/kubernetes.io/cluster/${local.cluster_name}": "owned",
+                "aws:ResourceTag/topology.kubernetes.io/region": "${var.region}",
+                "aws:RequestTag/kubernetes.io/cluster/${local.cluster_name}": "owned",
+                "aws:RequestTag/topology.kubernetes.io/region": "${var.region}"
+            },
+            "StringLike": {
+                "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass": "*",
+                "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass": "*"
+            }
+            }
+        },
+        {
+            "Sid": "AllowScopedInstanceProfileActions",
+            "Effect": "Allow",
+            "Resource": "*",
+            "Action": [
+            "iam:AddRoleToInstanceProfile",
+            "iam:RemoveRoleFromInstanceProfile",
+            "iam:DeleteInstanceProfile"
+            ],
+            "Condition": {
+            "StringEquals": {
+                "aws:ResourceTag/kubernetes.io/cluster/${local.cluster_name}": "owned",
+                "aws:ResourceTag/topology.kubernetes.io/region": "${var.region}"
+            },
+            "StringLike": {
+                "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass": "*"
+            }
+            }
+        },
+        {
+            "Sid": "AllowInstanceProfileReadActions",
+            "Effect": "Allow",
+            "Resource": "*",
+            "Action": "iam:GetInstanceProfile"
+        }
+    ],
+    "Version": "2012-10-17"
+}
+EOF
+    node_policy_ca = <<EOF
 {
     "Statement": [
       {
@@ -201,6 +323,15 @@ resource "aws_iam_role_policy" "node" {
     "Version": "2012-10-17"
 }
 EOF
+
+    node_policy = var.autoscaler_name == "karpenter" ? local.node_policy_ka : local.node_policy_ca
+}
+
+// See https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/README.md#iam-policy
+resource "aws_iam_role_policy" "node" {
+    name = "${var.prefix}-node-ca"
+    role = aws_iam_role.node.id
+    policy = local.node_policy
 }
 
 // Give nodes AmazonEKSWorkerNodePolicy
