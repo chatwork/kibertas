@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestNewFluent(t *testing.T) {
+func TestFluentE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
