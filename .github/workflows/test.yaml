@@ -29,6 +29,9 @@ jobs:
         run: |
           sudo sysctl -w net.ipv6.conf.all.forwarding=1
           sudo sysctl -w net.ipv4.ip_forward=1
+      - name: Check docker bridge mtu
+        run: |
+          docker network inspect bridge -f '{{ index .Options "com.docker.network.driver.mtu" }}'
       - name: Creat kind
         run: make ci:enable:k8s
       - name: Run tests
