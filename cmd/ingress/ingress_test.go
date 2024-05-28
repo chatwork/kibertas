@@ -59,6 +59,9 @@ func TestCheck(t *testing.T) {
 
 	kc := h.KubernetesCluster(t)
 
+	// Ensure that the cluster is ready
+	time.Sleep(3 * time.Minute)
+
 	// Start cloud-provider-kind to manage service type=LoadBalancer
 	//
 	// This requiers cloud-provider-kind to be installed in the PATH.
