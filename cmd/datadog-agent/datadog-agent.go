@@ -95,6 +95,24 @@ func (d *DatadogAgent) checkMetrics() error {
 	// let's use NewDefaultContext to load the environment variables.
 	ddctx := datadog.NewDefaultContext(d.Ctx)
 
+	// In case we had non-empty d.ApiKey and d.AppKey set along with
+	// the environment variables, the user intent is to use the
+	// API keys from the DatadogAgent struct.
+	keys := map[string]datadog.APIKey{}
+	if d.ApiKey != "" {
+		keys["apiKeyAuth"] = datadog.APIKey{Key: d.ApiKey}
+	}
+	if d.AppKey != "" {
+		keys["appKeyAuth"] = datadog.APIKey{Key: d.AppKey}
+	}
+	if len(keys) > 0 {
+		ddctx = context.WithValue(
+			ddctx,
+			datadog.ContextAPIKeys,
+			keys,
+		)
+	}
+
 	configuration := datadog.NewConfiguration()
 	apiClient := datadog.NewAPIClient(configuration)
 	api := datadogV1.NewMetricsApi(apiClient)
@@ -124,6 +142,9 @@ func (d *DatadogAgent) checkMetrics() error {
 		}
 
 		if resp.Error != nil {
+			if r.StatusCode == 200 {
+				return true, fmt.Errorf("HTTP status was 200 OK but got Datadog API error: %s", *resp.Error)
+			}
 			d.Logger().Warnf("Datadog API error: %s", *resp.Error)
 			return false, nil
 		}

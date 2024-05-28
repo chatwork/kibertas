@@ -60,7 +60,7 @@ func TestCheck(t *testing.T) {
 		Checker:      cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 3*time.Minute),
 		ApiKey:       "test",
 		AppKey:       "test",
-		QueryMetrics: "avg:kubernetes.cpu.user.total",
+		QueryMetrics: "avg:kubernetes.cpu.user.total{*}",
 		WaitTime:     1 * time.Second,
 	}
 
