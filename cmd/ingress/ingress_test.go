@@ -64,8 +64,6 @@ func TestCheck(t *testing.T) {
 	// conflicts among test namespaces across test runs
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d", now.Year(), now.Month(), now.Day())
 
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-
 	k8sclient, err := config.NewK8sClientset()
 	if err != nil {
 		t.Fatalf("NewK8sClientset: %s", err)
@@ -81,7 +79,7 @@ func TestCheck(t *testing.T) {
 		IngressClassName:  "nginx",
 		ResourceName:      "sample",
 		ExternalHostname:  "sample.example.com",
-		HTTPCheckEndpoint: "http://localhost:8080/",
+		HTTPCheckEndpoint: "http://localhost/",
 	}
 
 	err = ingress.Check()
