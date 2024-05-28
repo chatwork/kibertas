@@ -6,8 +6,8 @@
 
 // Usage:
 //   terraform init
-//   terraform plan -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-ca-
-//   terraform apply -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-ca-
+//   terraform plan -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-ca -var capacity_type=SPOT -var node_template_app_label_value=sample-for-scale
+//   terraform apply -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-ca -var capacity_type=SPOT -var node_template_app_label_value=sample-for-scale
 
 terraform {
   required_providers {
