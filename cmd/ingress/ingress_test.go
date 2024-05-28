@@ -18,7 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestNewIngress(t *testing.T) {
+func TestIngressNew(t *testing.T) {
 	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
@@ -35,7 +35,7 @@ func TestNewIngress(t *testing.T) {
 	}
 }
 
-func TestCheck(t *testing.T) {
+func TestIngressCheckE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
@@ -157,7 +157,7 @@ func StartProcess(t *testing.T, name string) *ProcessHandle {
 	return handle
 }
 
-func TestCheckDNSRecord(t *testing.T) {
+func TestIngressCheckDNSRecord(t *testing.T) {
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
