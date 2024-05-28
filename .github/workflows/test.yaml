@@ -30,6 +30,8 @@ jobs:
         run: make ci:enable:k8s
       - name: Run tests
         run: make test
+      - name: Run E2E tests
+        run: make e2e
   golangci:
     name: lint
     runs-on: ubuntu-latest
