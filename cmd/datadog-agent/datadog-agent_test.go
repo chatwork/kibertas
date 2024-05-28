@@ -81,8 +81,6 @@ func requireEnv(t *testing.T, name string) string {
 }
 
 func TestCheckE2E(t *testing.T) {
-	t.Parallel()
-
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
