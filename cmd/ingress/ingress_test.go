@@ -79,7 +79,7 @@ func TestCheck(t *testing.T) {
 		IngressClassName:  "nginx",
 		ResourceName:      "sample",
 		ExternalHostname:  "sample.example.com",
-		HTTPCheckEndpoint: "http://localhost/",
+		HTTPCheckEndpoint: "http://localhost:8080/",
 	}
 
 	err = ingress.Check()
