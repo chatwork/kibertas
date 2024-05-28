@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
