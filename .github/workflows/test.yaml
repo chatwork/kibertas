@@ -21,6 +21,11 @@ jobs:
         with:
           go-version: '1.21.3'
           check-latest: true
+      # See https://github.com/kubernetes-sigs/cloud-provider-kind/blob/ad8f47301724c7615b5baef24fa7fce82d364f33/.github/workflows/k8s.yml#L37C1-L40C45
+      - name: Enable ipv4 and ipv6 forwarding
+        run: |
+          sudo sysctl -w net.ipv6.conf.all.forwarding=1
+          sudo sysctl -w net.ipv4.ip_forward=1
       - name: Creat kind
         run: make ci:enable:k8s
       - name: Run tests
