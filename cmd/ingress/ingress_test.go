@@ -133,6 +133,10 @@ func StartProcess(t *testing.T, name string) *ProcessHandle {
 }
 
 func TestIngressCheckDNSRecord(t *testing.T) {
+	if os.Getenv("INGRESS_CHECK_DNS_RECORD") == "" {
+		t.Skip("Skipping test as INGRESS_CHECK_DNS_RECORD is not set")
+	}
+
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
