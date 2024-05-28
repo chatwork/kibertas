@@ -73,7 +73,7 @@ delete-kind:
 apply-ingress-nginx:
 	@kubectl apply --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml
 	@sleep 2
-	@kubectl -n ingress-nginx wait deploy -l app.kubernetes.io/instance=ingress-nginx --for=condition=available --timeout=60s
+	@kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
 
 .PHONY: delete-ingress-nginx
 delete-ingress-nginx:
