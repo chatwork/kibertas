@@ -70,7 +70,7 @@ func TestCheck(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	handle := StartProcess(t, bin)
+	handle := SuDoStartProcess(t, bin)
 	defer handle.Stop(t)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
@@ -139,12 +139,14 @@ func (h *ProcessHandle) Stop(t *testing.T) {
 	}
 }
 
-func StartProcess(t *testing.T, name string) *ProcessHandle {
+func SuDoStartProcess(t *testing.T, name string) *ProcessHandle {
 	t.Helper()
 
 	handle := &ProcessHandle{}
 
-	proc, err := os.StartProcess(name, []string{}, &os.ProcAttr{
+	executable, _ := exec.LookPath("sudo")
+
+	proc, err := os.StartProcess(executable, []string{"sudo", name}, &os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 	})
 
