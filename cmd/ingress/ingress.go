@@ -3,7 +3,6 @@ package ingress
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
@@ -29,15 +28,9 @@ type Ingress struct {
 	Namespace        string
 	Clientset        *kubernetes.Clientset
 	NoDnsCheck       bool
-	NoHTTPCheck      bool
 	IngressClassName string
 	ResourceName     string
 	ExternalHostname string
-	// HTTPCheckEndpoint is the HTTP endpoint that is requested to check the service.
-	// If not set, it defaults to http://<ExternalHostname>/
-	// This is usually set to the LoadBalancer IP of the Ingress Controller Service,
-	// in case the external hostname is not resolvable.
-	HTTPCheckEndpoint string
 }
 
 func NewIngress(checker *cmd.Checker, noDnsCheck bool) (*Ingress, error) {
@@ -103,16 +96,6 @@ func (i *Ingress) Check() error {
 		if err := i.checkDNSRecord(); err != nil {
 			return err
 		}
-	}
-
-	if i.NoHTTPCheck {
-		i.Chatwork.AddMessage("Skip HTTP Check\n")
-		i.Logger().Info("Skip HTTP Check")
-	} else {
-		if err := i.checkHTTP(); err != nil {
-			return err
-		}
-
 	}
 
 	i.Chatwork.AddMessage("Ingress check finished\n")
@@ -204,7 +187,7 @@ func (i *Ingress) createDeploymentObject() *appsv1.Deployment {
 								{
 									Name:          "http",
 									Protocol:      apiv1.ProtocolTCP,
-									ContainerPort: 80,
+									ContainerPort: 8080,
 								},
 							},
 						},
@@ -230,7 +213,7 @@ func (i *Ingress) createServiceObject() *apiv1.Service {
 				{
 					Protocol:   apiv1.ProtocolTCP,
 					Port:       80,
-					TargetPort: intstr.FromInt(80),
+					TargetPort: intstr.FromInt(8080),
 				},
 			},
 		},
@@ -321,49 +304,6 @@ func (i *Ingress) checkDNSRecord() error {
 
 	if err != nil {
 		return fmt.Errorf("waiting for DNS Record to be ready: %w", err)
-	}
-
-	return nil
-}
-
-// Tries to access the service endpoint via HTTP
-// and see if it returns 200 OK.
-func (i *Ingress) checkHTTP() error {
-	var endpoint string
-	if i.HTTPCheckEndpoint != "" {
-		endpoint = i.HTTPCheckEndpoint
-	} else {
-		endpoint = fmt.Sprintf("http://%s/", i.ExternalHostname)
-	}
-
-	i.Logger().Infof("Check HTTP for: %s", endpoint)
-	err := wait.PollUntilContextTimeout(i.Ctx, 10*time.Second, i.Timeout, false, func(ctx context.Context) (bool, error) {
-		req, err := http.NewRequest("GET", endpoint, nil)
-		if err != nil {
-			return false, err
-		}
-		req.Host = i.ExternalHostname
-
-		i.Logger().Infof("Requesting %s with headers %v", endpoint, req.Header)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			i.Logger().Warn(err)
-			return false, nil
-		}
-
-		if resp.StatusCode != 200 {
-			i.Logger().Infof("HTTP Status Code is not 200: %d", resp.StatusCode)
-			return false, nil
-		}
-
-		i.Logger().Info("HTTP Status Code is 200")
-		i.Chatwork.AddMessage("HTTP Status Code is 200\n")
-		return true, nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("waiting for HTTP service to be ready: %w", err)
 	}
 
 	return nil
