@@ -58,6 +58,7 @@ func TestCheck(t *testing.T) {
 	)
 
 	kc := h.KubernetesCluster(t)
+	time.Sleep(2 * time.Minute)
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
 	// Start cloud-provider-kind to manage service type=LoadBalancer
