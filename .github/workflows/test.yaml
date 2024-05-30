@@ -36,8 +36,7 @@ jobs:
           version: v3.15.1
       - name: Run cloud-provider-kind
         run: |
-          make
-          nohup bin/cloud-provider-kind > ./_artifacts/ccm-kind.log 2>&1 &
+          nohup cloud-provider-kind > ./_artifacts/ccm-kind.log 2>&1 &
       - name: Create multi node cluster
         run: |
           # create cluster
