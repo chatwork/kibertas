@@ -28,7 +28,9 @@ jobs:
           sudo sysctl -w net.ipv6.conf.all.forwarding=1
           sudo sysctl -w net.ipv4.ip_forward=1
       - name: Set up k8s
-        run: make ci:enable:k8s
+        run: |
+          make ci:enable:k8s
+          mkdir -p _artifacts
       - uses: azure/setup-helm@v4
         with:
           version: v3.15.1
@@ -75,7 +77,7 @@ jobs:
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
-          helm upgrade ingress-nginx  ingress-nginx/ingress-nginx --install --namespace ingress-nginx --atomic --wait --create-namespace
+          helm upgrade ingress-nginx  ingress-nginx/ingress-nginx --install --namespace ${INGRESS_NGINX_NAMESPACE} --atomic --wait --create-namespace
       - name: Run tests
         run: make test
   golangci:

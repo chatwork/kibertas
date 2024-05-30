@@ -55,14 +55,14 @@ func TestCheck(t *testing.T) {
 	// Get the external IP of the ingress-nginx service
 	result := exec.Command("kubectl", "get", "svc", "-n", ingressNginxNs, "ingress-nginx-controller", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}")
 
-	ingressNginxSvcLBIP, err := result.Output()
+	ingressNginxSvcLBIP, _ := result.Output()
 	t.Logf("ingress-nginx service LB IP: %s", string(ingressNginxSvcLBIP))
 
 	// We intentionally make the test namespace deterministic to avoid ingress path
 	// conflicts among test namespaces across test runs
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d", now.Year(), now.Month(), now.Day())
 
-	k8sclientset, err := config.NewK8sClientset()
+	k8sclientset, _ := config.NewK8sClientset()
 
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
@@ -77,7 +77,7 @@ func TestCheck(t *testing.T) {
 		HTTPCheckEndpoint: "http://" + string(ingressNginxSvcLBIP) + "/",
 	}
 
-	err = ingress.Check()
+	err := ingress.Check()
 	if err != nil {
 		t.Fatalf("Expected No Error, but got error: %s", err)
 	}
