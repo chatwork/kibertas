@@ -10,6 +10,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      INGRESS_NGINX_NAMESPACE: "ingress-nginx"
     timeout-minutes: 55
     steps:
       - name: Checkout
@@ -25,11 +27,55 @@ jobs:
         run: |
           sudo sysctl -w net.ipv6.conf.all.forwarding=1
           sudo sysctl -w net.ipv4.ip_forward=1
-      - name: Check docker bridge mtu
-        run: |
-          docker network inspect bridge -f '{{ index .Options "com.docker.network.driver.mtu" }}'
-      - name: Create kind
+      - name: Set up k8s
         run: make ci:enable:k8s
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.1
+      - name: Run cloud-provider-kind
+        run: |
+          make
+          nohup bin/cloud-provider-kind > ./_artifacts/ccm-kind.log 2>&1 &
+      - name: Create multi node cluster
+        run: |
+          # create cluster
+          cat <<EOF | /usr/local/bin/kind create cluster \
+            -v7 --wait 1m --retain --config=-
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+          - role: worker
+          - role: worker
+          kubeadmConfigPatches:
+            - |
+              kind: ClusterConfiguration
+              apiServer:
+                extraArgs:
+                  cloud-provider: "external"
+                  v: "5"
+              controllerManager:
+                extraArgs:
+                  cloud-provider: "external"
+                  v: "5"
+              ---
+              kind: InitConfiguration
+              nodeRegistration:
+                kubeletExtraArgs:
+                  cloud-provider: "external"
+                  v: "5"
+              ---
+              kind: JoinConfiguration
+              nodeRegistration:
+                kubeletExtraArgs:
+                  cloud-provider: "external"
+                  v: "5"
+          EOF
+      - name: Install ingress-nginx
+        run: |
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo update
+          helm upgrade ingress-nginx  ingress-nginx/ingress-nginx --install --namespace ingress-nginx --atomic --wait --create-namespace
       - name: Run tests
         run: make test
   golangci:

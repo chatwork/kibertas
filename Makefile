@@ -60,7 +60,6 @@ ci\:enable\:k8s:
 
 	@go install sigs.k8s.io/cloud-provider-kind@latest
 	@sudo install ~/go/bin/cloud-provider-kind /usr/local/bin
-	#kind create cluster --image kindest/node:v$(KUBERNETES_VERSION)@sha256:$(KIND_NODE_HASH) --wait 3m;
 
 .PHONY: delete-kind
 delete-kind:

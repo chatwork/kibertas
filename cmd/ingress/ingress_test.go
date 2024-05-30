@@ -12,8 +12,6 @@ import (
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
 	"github.com/chatwork/kibertas/util/notify"
-	"github.com/mumoshu/testkit"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sirupsen/logrus"
 )
@@ -49,72 +47,34 @@ func TestCheck(t *testing.T) {
 
 	now := time.Now()
 
-	h := testkit.New(t,
-		testkit.Providers(
-			&testkit.KindProvider{},
-			&testkit.KubectlProvider{},
-		),
-		testkit.RetainResourcesOnFailure(),
-	)
-
-	kc := h.KubernetesCluster(t)
-	time.Sleep(2 * time.Minute)
-	kctl := testkit.NewKubectl(kc.KubeconfigPath)
-
-	// Start cloud-provider-kind to manage service type=LoadBalancer
-	//
-	// This requiers cloud-provider-kind to be installed in the PATH.
-	// Follow https://github.com/kubernetes-sigs/cloud-provider-kind?tab=readme-ov-file#install to install it.
-	bin, err := exec.LookPath("cloud-provider-kind")
-	if bin == "" {
-		t.Fatalf("cloud-provider-kind not found in PATH: %s", os.Getenv("PATH"))
+	ingressNginxNs := os.Getenv("INGRESS_NGINX_NAMESPACE")
+	if ingressNginxNs == "" {
+		ingressNginxNs = "ingress-nginx"
 	}
-	require.NoError(t, err)
-
-	handle := SuDoStartProcess(t, bin)
-	defer handle.Stop(t)
-
-	helm := testkit.NewHelm(kc.KubeconfigPath)
-	// See https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler#tldr
-	helm.AddRepo(t, "ingress-nginx", "https://kubernetes.github.io/ingress-nginx")
-
-	ingressNginxNs := "default"
-	helm.UpgradeOrInstall(t, "my-ingress-nginx", "ingress-nginx/ingress-nginx", func(hc *testkit.HelmConfig) {
-		hc.Values = map[string]interface{}{
-			"rbac": map[string]interface{}{
-				"create": true,
-			},
-		}
-
-		hc.Namespace = ingressNginxNs
-	})
 
 	// Get the external IP of the ingress-nginx service
-	ingressNginxSvcLBIP := kctl.Capture(t, "get", "svc", "-n", ingressNginxNs, "my-ingress-nginx-controller", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}")
-	t.Logf("ingress-nginx service LB IP: %s", ingressNginxSvcLBIP)
+	result := exec.Command("kubectl", "get", "svc", "-n", ingressNginxNs, "ingress-nginx-controller", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}")
+
+	ingressNginxSvcLBIP, err := result.Output()
+	t.Logf("ingress-nginx service LB IP: %s", string(ingressNginxSvcLBIP))
 
 	// We intentionally make the test namespace deterministic to avoid ingress path
 	// conflicts among test namespaces across test runs
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d", now.Year(), now.Month(), now.Day())
 
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-
-	k8sclient, err := config.NewK8sClientset()
-	if err != nil {
-		t.Fatalf("NewK8sClientset: %s", err)
-	}
+	k8sclientset, err := config.NewK8sClientset()
 
 	// kindとingress-nginxがある前提
 	// レコードは作れないのでNoDnsCheckをtrueにする
 	ingress := &Ingress{
 		Checker:           cmd.NewChecker(context.Background(), true, logger, chatwork, "test", 1*time.Minute),
 		Namespace:         namespace,
-		Clientset:         k8sclient,
+		Clientset:         k8sclientset,
 		NoDnsCheck:        true,
 		IngressClassName:  "nginx",
 		ResourceName:      "sample",
 		ExternalHostname:  "sample.example.com",
-		HTTPCheckEndpoint: "http://" + ingressNginxSvcLBIP + "/",
+		HTTPCheckEndpoint: "http://" + string(ingressNginxSvcLBIP) + "/",
 	}
 
 	err = ingress.Check()
