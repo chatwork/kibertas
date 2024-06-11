@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestNewDatadogAgent(t *testing.T) {
+func TestDatadogAgentNew(t *testing.T) {
 	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
@@ -30,7 +30,7 @@ func TestNewDatadogAgent(t *testing.T) {
 	}
 }
 
-func TestCheck(t *testing.T) {
+func TestDatadogAgentCheck(t *testing.T) {
 	t.Parallel()
 
 	logger := func() *logrus.Entry {
@@ -80,9 +80,7 @@ func requireEnv(t *testing.T, name string) string {
 	return v
 }
 
-func TestCheckE2E(t *testing.T) {
-	t.Parallel()
-
+func TestDatadogAgentCheckE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}

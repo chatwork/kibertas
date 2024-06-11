@@ -18,29 +18,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestNewIngress(t *testing.T) {
-	t.Parallel()
-	logger := func() *logrus.Entry {
-		return logrus.NewEntry(logrus.New())
-	}
-	chatwork := &notify.Chatwork{}
-	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 3*time.Minute)
-	ingress, err := NewIngress(checker, false)
-	if err != nil {
-		t.Fatalf("NewIngress: %s", err)
-	}
-
-	if ingress == nil {
-		t.Error("Expected ingress instance, got nil")
-	}
-}
-
-func TestCheck(t *testing.T) {
+func TestIngressCheckE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
 
-	t.Parallel()
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -98,24 +80,16 @@ func TestCheck(t *testing.T) {
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d", now.Year(), now.Month(), now.Day())
 
 	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-
-	k8sclient, err := config.NewK8sClientset()
-	if err != nil {
-		t.Fatalf("NewK8sClientset: %s", err)
-	}
-
-	// kindとingress-nginxがある前提
-	// レコードは作れないのでNoDnsCheckをtrueにする
-	ingress := &Ingress{
-		Checker:           cmd.NewChecker(context.Background(), true, logger, chatwork, "test", 1*time.Minute),
-		Namespace:         namespace,
-		Clientset:         k8sclient,
-		NoDnsCheck:        true,
-		IngressClassName:  "nginx",
-		ResourceName:      "sample",
-		ExternalHostname:  "sample.example.com",
-		HTTPCheckEndpoint: "http://" + ingressNginxSvcLBIP + "/",
-	}
+	os.Setenv("RESOURCE_NAME", "sample")
+	os.Setenv("EXTERNAL_HOSTNAME", "sample.example.com")
+	os.Setenv("INGRESS_CLASS_NAME", "nginx")
+	ingress, err := NewIngress(
+		cmd.NewChecker(context.Background(), true, logger, chatwork, "test", 1*time.Minute),
+		true,
+	)
+	require.NoError(t, err)
+	ingress.Namespace = namespace
+	ingress.HTTPCheckEndpoint = "http://" + ingressNginxSvcLBIP + "/"
 
 	err = ingress.Check()
 	if err != nil {
@@ -162,7 +136,11 @@ func StartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
 	return handle
 }
 
-func TestCheckDNSRecord(t *testing.T) {
+func TestIngressCheckDNSRecord(t *testing.T) {
+	if os.Getenv("INGRESS_CHECK_DNS_RECORD") == "" {
+		t.Skip("Skipping test as INGRESS_CHECK_DNS_RECORD is not set")
+	}
+
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}

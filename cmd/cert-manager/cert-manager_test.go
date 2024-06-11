@@ -58,8 +58,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestNewCertManager(t *testing.T) {
-	t.Parallel()
+func TestCertManagerNew(t *testing.T) {
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
 	}
@@ -75,9 +74,7 @@ func TestNewCertManager(t *testing.T) {
 	}
 }
 
-func TestCheck(t *testing.T) {
-	t.Parallel()
-
+func TestCertManagerCheck(t *testing.T) {
 	helm := testkit.NewHelm(os.Getenv("KUBECONFIG"))
 	helm.AddRepo(t, "jetstack", "https://charts.jetstack.io")
 
