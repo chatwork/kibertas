@@ -69,7 +69,7 @@ func TestCheck(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	handle := StartProcess(t, bin)
+	handle := StartProcess(t, bin, kc.KubeconfigPath)
 	defer handle.Stop(t)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
@@ -140,13 +140,17 @@ func (h *ProcessHandle) Stop(t *testing.T) {
 	}
 }
 
-func StartProcess(t *testing.T, name string) *ProcessHandle {
+func StartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
 	t.Helper()
 
 	handle := &ProcessHandle{}
 
+	env := os.Environ()
+	env = append(env, "KUECONFIG="+kubeconfig)
+
 	proc, err := os.StartProcess(name, []string{}, &os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+		Env:   env,
 	})
 
 	if err != nil {
