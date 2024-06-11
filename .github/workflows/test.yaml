@@ -7,10 +7,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # We runs only one job at a time to prevent contention on subnet CIDRs and EKS cluster names.
+  # This is needed because we share the same AWS account and VPC for all the tests.
+  group: ${{ github.workflow }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Have enough timeout for `make e2e`
+    # which requires up to 45 minutes to run.
+    timeout-minutes: 55
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,14 +28,12 @@ jobs:
         with:
           go-version: '1.21.3'
           check-latest: true
-      - name: Creat kind
-        run: make ci:enable:k8s
-      - name: Apply Cert Manager
-        run: make apply-cert-manager
-      - name: Apply Ingress-Nginx
-        run: make apply-ingress-nginx
       - name: Run tests
         run: make test
+      # In near future, we might want to run this
+      # only when triggered manually or on a schedule.
+      - name: Run E2E tests
+        run: make e2e
   golangci:
     name: lint
     runs-on: ubuntu-latest
