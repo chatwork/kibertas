@@ -85,7 +85,15 @@ DD_APP_KEY=...
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 # Otherwise provide appropriate aws config, instance profile, or IAM role for SA
+
+VPC_ID=...
 ```
+
+> **VPC requirements:**
+>
+> The AWS VPC denoted by `VPC_ID` should have an internet gateway attached to it, and the primary route table should have a route to the internet gateway for the cidr block `0.0.0.0/0`.
+>
+> The VPC does not need to have subnets, as the tests will create them.
 
 Now run everything:
 
