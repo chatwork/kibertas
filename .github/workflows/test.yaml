@@ -35,6 +35,9 @@ jobs:
       # In near future, we might want to run this
       # only when triggered manually or on a schedule.
       - name: Run E2E tests
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
         run: make e2e
   golangci:
     name: lint
