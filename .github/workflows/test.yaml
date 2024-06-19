@@ -28,6 +28,8 @@ jobs:
         with:
           go-version: '1.21.3'
           check-latest: true
+      - name: Install cloud-provider-kind
+        run: make cloud-provider-kind
       - name: Run tests
         run: make test
       # In near future, we might want to run this
