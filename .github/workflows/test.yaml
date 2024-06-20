@@ -28,11 +28,16 @@ jobs:
         with:
           go-version: '1.21.3'
           check-latest: true
+      - name: Install cloud-provider-kind
+        run: make cloud-provider-kind
       - name: Run tests
         run: make test
       # In near future, we might want to run this
       # only when triggered manually or on a schedule.
       - name: Run E2E tests
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
         run: make e2e
   golangci:
     name: lint
