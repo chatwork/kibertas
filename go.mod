@@ -12,7 +12,7 @@ require (
 	github.com/miekg/dns v1.1.57
 	github.com/mumoshu/testkit v0.9.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.8.4
 	k8s.io/api v0.28.4
 	k8s.io/apimachinery v0.28.4
