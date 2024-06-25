@@ -33,18 +33,17 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	}
 
 	appName := "sample-for-scale"
-	capacityType := "SPOT"
-	// capacityType := "ON_DEMAND"
 
 	h := testkit.New(t,
 		testkit.Providers(
 			&testkit.TerraformProvider{
 				WorkspacePath: "testdata/terraform",
 				Vars: map[string]string{
+					"autoscaler_name":               "karpenter",
 					"prefix":                        "kibertas-ca",
 					"region":                        "ap-northeast-1",
 					"vpc_id":                        vpcID,
-					"capacity_type":                 capacityType,
+					"capacity_type":                 "SPOT",
 					"node_template_app_label_value": appName,
 				},
 			},
@@ -106,8 +105,9 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 		defer f.Close()
 
 		require.NoError(t, tmpl.ExecuteTemplate(f, "karpenter.yaml", map[string]string{
-			"${CLUSTER_NAME}": "kibertas-ca-cluster",
-			"${AMD_AMI_ID}":   amdAMIID,
+			"ClusterName": "kibertas-ca-cluster",
+			"AmdAmiId":    amdAMIID,
+			"RoleName":    "kibertas-ca-node",
 		}))
 	}
 
@@ -121,7 +121,8 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	os.Setenv("RESOURCE_NAME", appName)
 	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
 	// os.Setenv("NODE_LABEL_VALUE", "ON_DEMAND")
-	os.Setenv("NODE_LABEL_VALUE", capacityType)
+	os.Setenv("NODE_LABEL_KEY", "karpenter.sh/capacity-type")
+	os.Setenv("NODE_LABEL_VALUE", "spot")
 
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())

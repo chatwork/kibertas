@@ -9,6 +9,7 @@
 //   terraform plan -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-ca -var capacity_type=SPOT -var node_template_app_label_value=sample-for-scale
 //   terraform apply -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-ca -var capacity_type=SPOT -var node_template_app_label_value=sample-for-scale
 
+
 terraform {
   required_providers {
     aws = {
@@ -99,6 +100,11 @@ resource "aws_eks_node_group" "spot" {
         max_size = 3
         min_size = 0
     }
+    // This is translated to eks.amazonaws.com/capacityType=[SPOT|ON_DEMAND]
+    // node label by EKS.
+    // The label must match karpenter.sh/capacity-type label in the NodePool.
+    // Otherwise karpenter will complain with a message like:
+    //   {"level":"ERROR","time":"*snip*","logger":"controller","message":"could not schedule pod","commit":"490ef94","controller":"provisioner","Pod":{"name":"sample-for-scale-68fcbd98cc-gs7g8","namespace":"cluster-autoscaler-test-20240619-pwpm2"},"error":"incompatible with nodepool \"default\", daemonset overhead={\"cpu\":\"150m\",\"pods\":\"2\"}, incompatible requirements, label \"eks.amazonaws.com/capacityType\" does not have known values"}
     capacity_type = var.capacity_type
     instance_types = ["t3.large"]
     labels = {
@@ -108,6 +114,7 @@ resource "aws_eks_node_group" "spot" {
         "k8s.io/cluster-autoscaler/node-template/label/app": var.node_template_app_label_value,
         "k8s.io/cluster-autoscaler/enabled" = "true"
         "k8s.io/cluster-autoscaler/${aws_eks_cluster.cluster.name}" = "owned"
+        "eks.amazonaws.com/capacityType" = "SPOT"
     }
 }
 
@@ -217,7 +224,7 @@ locals {
         {
             "Effect": "Allow",
             "Action": "iam:PassRole",
-            "Resource": "arn:aws:iam::${local.aws_account_id}:role/KarpenterNodeRole-${local.cluster_name}",
+            "Resource": "${aws_iam_role.node.arn}",
             "Sid": "PassNodeIAMRole"
         },
         {
@@ -287,6 +294,16 @@ locals {
             "Effect": "Allow",
             "Resource": "*",
             "Action": "iam:GetInstanceProfile"
+        },
+        {
+            "Sid": "AllowInterruptionQueueActions",
+            "Effect": "Allow",
+            "Resource": "${aws_sqs_queue.karpenter_interruption_queue.arn}",
+            "Action": [
+                "sqs:DeleteMessage",
+                "sqs:GetQueueUrl",
+                "sqs:ReceiveMessage"
+            ]
         }
     ],
     "Version": "2012-10-17"
@@ -355,6 +372,12 @@ resource "aws_security_group" "cluster" {
         protocol = "-1"
         cidr_blocks = ["0.0.0.0/0"]
     }
+    tags = {
+        // Must match EC2NodeClass securityGroupSelectorTerms.tags
+        // Otherwise karpenter complains with a message like:
+        //   {"level":"ERROR","time":"*snip*","logger":"controller","message":"failed listing instance types for default","commit":"490ef94","controller":"disruption","error":"no subnets found"}
+        "karpenter.sh/discovery" = local.cluster_name
+    }
 }
 
 data "aws_availability_zones" "available" {
@@ -367,4 +390,12 @@ resource "aws_subnet" "public" {
     cidr_block = "${cidrsubnet(data.aws_vpc.vpc.cidr_block, 4, 10+count.index)}"
     availability_zone = data.aws_availability_zones.available.names[count.index%length(data.aws_availability_zones.available.names)]
     map_public_ip_on_launch = true
+    tags = {
+        // Must match EC2NodeClass subnetSelectorTerms.tags
+        "karpenter.sh/discovery" = local.cluster_name
+    }
+}
+
+resource "aws_sqs_queue" "karpenter_interruption_queue" {
+    name = "${local.cluster_name}"
 }
