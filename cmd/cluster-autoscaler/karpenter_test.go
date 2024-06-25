@@ -142,23 +142,23 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 
 	initialNodes := len(k.ListReadyNodeNames(t))
 
-	// Scale from 1 to 2
+	// Scale up by 1
 	require.NoError(t, clusterautoscaler.Check())
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
 		nodes := k.ListReadyNodeNames(t)
 		return len(nodes) == initialNodes+1, nil
 	}))
 
-	// Scale to 0
+	// Scale to zero (or the original number of nodes)
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 10*time.Minute, false, func(ctx context.Context) (bool, error) {
 		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == 2, nil
+		return len(nodes) == initialNodes, nil
 	}))
 
-	// Scale from 0 to 1
+	// Scale up by 1 (again)
 	require.NoError(t, clusterautoscaler.Check())
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 8*time.Minute, false, func(ctx context.Context) (bool, error) {
 		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == 3, nil
+		return len(nodes) == initialNodes+1, nil
 	}))
 }
