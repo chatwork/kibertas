@@ -71,15 +71,6 @@ func TestDatadogAgentCheck(t *testing.T) {
 	}
 }
 
-func requireEnv(t *testing.T, name string) string {
-	t.Helper()
-	v := os.Getenv(name)
-	if v == "" {
-		t.Fatalf("env %s is required", name)
-	}
-	return v
-}
-
 func TestDatadogAgentCheckE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
@@ -89,8 +80,14 @@ func TestDatadogAgentCheckE2E(t *testing.T) {
 		return logrus.NewEntry(logrus.New())
 	}
 
-	datadogAPIKey := requireEnv(t, "DD_API_KEY")
-	datadogAppKey := requireEnv(t, "DD_APP_KEY")
+	datadogAPIKey := os.Getenv("DD_API_KEY")
+	if datadogAPIKey == "" {
+		t.Skip("DD_API_KEY is not set")
+	}
+	datadogAPPKey := os.Getenv("DD_APP_KEY")
+	if datadogAPPKey == "" {
+		t.Skip("DD_APP_KEY is not set")
+	}
 
 	h := testkit.New(t,
 		testkit.Providers(
@@ -118,7 +115,7 @@ func TestDatadogAgentCheckE2E(t *testing.T) {
 		kubectl.Capture(t, "delete", "secret", "datadog-secret")
 	})
 	kubectl.Capture(t, "create", "secret", "generic", "datadog-secret",
-		"--from-literal", "api-key="+datadogAPIKey, "--from-literal", "app-key="+datadogAppKey)
+		"--from-literal", "api-key="+datadogAPIKey, "--from-literal", "app-key="+datadogAPPKey)
 
 	t.Cleanup(func() {
 		if !t.Failed() {
