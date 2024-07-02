@@ -40,7 +40,7 @@ func TestIngressCheckE2E(t *testing.T) {
 	)
 
 	kc := h.KubernetesCluster(t)
-	time.Sleep(180 * time.Second)
+	time.Sleep(240 * time.Second)
 
 	// Start cloud-provider-kind to manage service type=LoadBalancer
 	//
