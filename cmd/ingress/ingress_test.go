@@ -52,7 +52,7 @@ func TestIngressCheckE2E(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	handle := StartProcess(t, bin, kc.KubeconfigPath)
+	handle := SudoStartProcess(t, bin, kc.KubeconfigPath)
 	defer handle.Stop(t)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
@@ -115,15 +115,14 @@ func (h *ProcessHandle) Stop(t *testing.T) {
 	}
 }
 
-func StartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
+func SudoStartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
 	t.Helper()
 
 	handle := &ProcessHandle{}
 
 	env := os.Environ()
 	env = append(env, "KUECONFIG="+kubeconfig)
-
-	proc, err := os.StartProcess(name, []string{}, &os.ProcAttr{
+	proc, err := os.StartProcess("/usr/bin/sudo", []string{"sudo", name}, &os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 		Env:   env,
 	})
