@@ -123,6 +123,10 @@ func SudoStartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
 	env := os.Environ()
 	env = append(env, "KUECONFIG="+kubeconfig)
 	sudoPath, err := exec.LookPath("sudo")
+	if sudoPath == "" {
+		t.Fatalf("sudo not found in PATH: %s", os.Getenv("PATH"))
+	}
+	require.NoError(t, err)
 	proc, err := os.StartProcess(sudoPath, []string{sudoPath, name}, &os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 		Env:   env,
