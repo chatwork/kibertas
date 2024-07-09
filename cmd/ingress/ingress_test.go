@@ -122,7 +122,8 @@ func SudoStartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
 
 	env := os.Environ()
 	env = append(env, "KUECONFIG="+kubeconfig)
-	proc, err := os.StartProcess("/usr/bin/sudo", []string{"sudo", name}, &os.ProcAttr{
+	sudoPath, err := exec.LookPath("sudo")
+	proc, err := os.StartProcess(sudoPath, []string{sudoPath, name}, &os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
 		Env:   env,
 	})
