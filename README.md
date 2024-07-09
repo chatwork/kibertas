@@ -24,13 +24,13 @@ Also, this tool is not a plugin for SONOBUOY, but a original implementation.
 
 # How to test locally
 
-You need to start [kind](https://github.com/kubernetes-sigs/kind) in advance and apply ingress-nginx and cert-manager.
+You need to install [kind](https://github.com/kubernetes-sigs/kind) and [cloud-provider-kind](https://github.com/kubernetes-sigs/cloud-provider-kind)in advance.
 
 ```
-$ kind create cluster
-$ make apply-cert-manager
-$ make apply-ingress-nginx
+$ make cloud-provider-kind
 ```
+
+When executing `cloud-provider-kind` in test on a Mac, you are prompted to run `sudo`.
 
 At the moment, not all target tests have been implemented.
 
