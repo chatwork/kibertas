@@ -1,6 +1,7 @@
 module github.com/chatwork/kibertas
 
-go 1.21.4
+go 1.22.0
+
 toolchain go1.22.5
 
 require (
