@@ -33,7 +33,9 @@ func TestIngressCheckE2E(t *testing.T) {
 
 	h := testkit.New(t,
 		testkit.Providers(
-			&testkit.KindProvider{},
+			&testkit.KindProvider{
+				Image: os.Getenv("KIND_IMAGE"),
+			},
 			&testkit.KubectlProvider{},
 		),
 		testkit.RetainResourcesOnFailure(),

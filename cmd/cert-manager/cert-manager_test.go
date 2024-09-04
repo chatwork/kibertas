@@ -23,7 +23,9 @@ import (
 func TestMain(m *testing.M) {
 	h, err := testkit.Build(
 		testkit.Providers(
-			&testkit.KindProvider{},
+			&testkit.KindProvider{
+				Image: os.Getenv("KIND_IMAGE"),
+			},
 			&testkit.KubectlProvider{},
 		),
 		testkit.RetainResourcesOnFailure(),
