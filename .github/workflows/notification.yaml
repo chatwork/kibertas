@@ -26,3 +26,10 @@ jobs:
         curl -sS -X POST -H "X-ChatWorkToken: $CHATWORK_API_TOKEN" \
         --data-urlencode "body=${MESSAGE}" \
         "https://api.chatwork.com/v2/rooms/$CHATWORK_ROOM_ID/messages"
+        
+        if [ $? -ne 0 ]; then
+          echo "Failed to send notification to Chatwork"
+          exit 1
+        fi
+
+        echo "Notification sent successfully"
