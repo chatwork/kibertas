@@ -1,0 +1,35 @@
+name: Send Notification to Chatwork
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Send notification to Chatwork
+      env:
+        CHATWORK_API_TOKEN: ${{ secrets.CHATWORK_API_TOKEN_GITHUB }}
+        CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
+      run: |
+        PR_TITLE=$(jq -r '.pull_request.title' $GITHUB_EVENT_PATH)
+        PR_URL=$(jq -r '.pull_request.html_url' $GITHUB_EVENT_PATH)
+        PR_USER=$(jq -r '.pull_request.user.login' $GITHUB_EVENT_PATH)
+        BODY=`cat <<EOS
+        PR_URL : ${PR_URL}
+        user : ${PR_USER}
+        EOS`
+        MESSAGE="[info][title]${PR_TITLE}[/title]${BODY}[/info]"
+
+        curl -sS -X POST -H "X-ChatWorkToken: $CHATWORK_API_TOKEN" \
+        --data-urlencode "body=${MESSAGE}" \
+        "https://api.chatwork.com/v2/rooms/$CHATWORK_ROOM_ID/messages"
+        
+        if [ $? -ne 0 ]; then
+          echo "Failed to send notification to Chatwork"
+          exit 1
+        fi
+
+        echo "Notification sent successfully"
