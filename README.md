@@ -112,4 +112,3 @@ Or even specify the targets via a regexp:
 ```
 go test ./cmd/datadog-agent -test.run TestNewDatadogAgent
 ```
-
