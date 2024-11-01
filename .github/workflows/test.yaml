@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-region: 'ap-northeast-1' # リージョンを指定
+          aws-region: 'ap-northeast-1'
           role-to-assume: ${{ secrets.AWS_ROLE_TEST }}
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,6 +51,7 @@ jobs:
         run: make e2e
         env:
           KIND_IMAGE: ${{ matrix.kind_image }}
+          VPC_ID: ${{ secrets.VPC_ID }}
   golangci:
     name: lint
     runs-on: ubuntu-latest
