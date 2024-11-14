@@ -32,16 +32,6 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 		t.Skip("AMD_AMI_ID is not set")
 	}
 
-	tfStateBucket := os.Getenv("TFSTATE_BUCKET")
-	if tfStateBucket == "" {
-		t.Skip("TFSTATE_BUCKET is not set")
-	}
-
-	tfStateKey := os.Getenv("TFSTATE_KEY")
-	if tfStateKey == "" {
-		t.Skip("TFSTATE_KEY is not set")
-	}
-
 	appName := "sample-for-scale"
 
 	h := testkit.New(t,
@@ -55,11 +45,6 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 					"vpc_id":                        vpcID,
 					"capacity_type":                 "SPOT",
 					"node_template_app_label_value": appName,
-				},
-				BackendConfig: map[string]string{
-					"bucket": tfStateBucket,
-					"key":    tfStateKey,
-					"region": "ap-northeast-1",
 				},
 			},
 			&testkit.KubectlProvider{},
