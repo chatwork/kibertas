@@ -30,7 +30,7 @@ func TestFluentE2E(t *testing.T) {
 			&testkit.TerraformProvider{
 				WorkspacePath: "testdata/terraform",
 				Vars: map[string]string{
-					"prefix": "kibertas-fluentd-",
+					"prefix": "kibertas-fluentd-test",
 					"region": "ap-northeast-1",
 					"vpc_id": vpcID,
 				},
