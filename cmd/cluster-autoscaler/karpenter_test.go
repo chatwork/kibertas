@@ -40,7 +40,7 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 				WorkspacePath: "testdata/terraform",
 				Vars: map[string]string{
 					"autoscaler_name":               "karpenter",
-					"prefix":                        "kibertas-ca",
+					"prefix":                        "kibertas-ca-test",
 					"region":                        "ap-northeast-1",
 					"vpc_id":                        vpcID,
 					"capacity_type":                 "SPOT",
