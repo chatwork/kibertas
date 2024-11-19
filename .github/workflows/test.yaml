@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   test:
+    environment: test
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -29,6 +30,7 @@ jobs:
       - name: Run tests
         run: make test
   kindtest:
+    environment: test
     strategy:
       matrix:
         kind_image:
