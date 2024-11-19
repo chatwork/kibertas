@@ -1,3 +1,5 @@
+//go:build !ekstest
+
 package ingress
 
 import (

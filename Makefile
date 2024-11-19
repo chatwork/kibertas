@@ -30,11 +30,15 @@ lint:
 
 .PHONY: test
 test:
-	go test -short -timeout 6m -v ./...
+	go test -timeout 6m -v ./util/... ./config/...
 
-.PHONY: e2e
-e2e:
-	go test -timeout 45m -v ./...
+.PHONY: e2e/kindtest
+e2e/kindtest:
+	go test -timeout 20m -v ./cmd/...
+
+.PHONY: e2e/ekstest
+e2e/ekstest:
+	go test -timeout 55m -v ./cmd/... -tags=ekstest
 
 # This will produce following images for testing locally:
 # - examplecom/kibertas:canary-arm64
