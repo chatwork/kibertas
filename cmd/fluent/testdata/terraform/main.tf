@@ -197,7 +197,7 @@ data "aws_availability_zones" "available" {
 resource "aws_subnet" "public" {
     count = 2
     vpc_id = data.aws_vpc.vpc.id
-    cidr_block = "${cidrsubnet(data.aws_vpc.vpc.cidr_block, 4, 10+count.index)}"
+    cidr_block = "${cidrsubnet(data.aws_vpc.vpc.cidr_block, 4, 12+count.index)}"
     availability_zone = data.aws_availability_zones.available.names[count.index%length(data.aws_availability_zones.available.names)]
     map_public_ip_on_launch = true
 }
