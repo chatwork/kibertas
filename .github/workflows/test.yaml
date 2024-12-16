@@ -17,11 +17,47 @@ concurrency:
 jobs:
   test:
     environment: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.3'
+          check-latest: true
+      - name: Run tests
+        run: make test
+  kindtest:
+    environment: test
     strategy:
       matrix:
         kind_image:
         - "kindest/node:v1.29.8@sha256:d46b7aa29567e93b27f7531d258c372e829d7224b25e3fc6ffdefed12476d3aa"
         # - "kindest/node:v1.30.4@sha256:976ea815844d5fa93be213437e3ff5754cd599b040946b5cca43ca45c2047114"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.3'
+          check-latest: true
+      - name: Install cloud-provider-kind
+        run: make cloud-provider-kind
+      - name: Run E2E tests on kind
+        run: make e2e/kindtest
+        env:
+          KIND_IMAGE: ${{ matrix.kind_image }}
+  ekstest:
+    environment: test
     runs-on: ubuntu-latest
     # Have enough timeout for `make e2e`
     # which requires up to 45 minutes to run.
@@ -43,14 +79,8 @@ jobs:
         with:
           go-version: '1.21.3'
           check-latest: true
-      - name: Install cloud-provider-kind
-        run: make cloud-provider-kind
-      - name: Run tests
-        run: make test
-      # In near future, we might want to run this
-      # only when triggered manually or on a schedule.
-      - name: Run E2E tests
-        run: make e2e
+      - name: Run E2E tests on EKS
+        run: make e2e/ekstest
         env:
           KIND_IMAGE: ${{ matrix.kind_image }}
           VPC_ID: ${{ secrets.VPC_ID }}
