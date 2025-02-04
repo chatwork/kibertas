@@ -6,9 +6,9 @@
 // - EKS cluster
 
 // Usage:
-//   terraform init
-//   terraform plan -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-fluentd-
-//   terraform apply -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=kibertas-fluentd-
+//   terraform init -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=$PREFIX -backend-config bucket=$TERRAFORM_STATE_BUCKET -backend-config key=$TERRAFORM_STATE_KEY -backend-config region=ap-northeast-1
+//   terraform plan -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=$PREFIX
+//   terraform apply -var vpc_id=$VPC_ID -var region=ap-northeast-1 -var prefix=$PREFIX
 
 terraform {
   required_providers {
@@ -17,6 +17,7 @@ terraform {
       version = "~> 5.0"
     }
   }
+  backend "s3" {}
 }
 
 provider "aws" {
@@ -38,6 +39,11 @@ variable "region" {
     description = "The region to use for this example"
 }
 
+variable "eks_access_principal_arn" {
+    type = string
+    description = "The principal arn to use for alternative eks access"
+}
+
 // vpc cidr block
 data "aws_vpc" "vpc" {
     id = var.vpc_id
@@ -48,6 +54,10 @@ resource "aws_s3_bucket" "bucket" {
     force_destroy = true
 }
 
+locals {
+  service_ipv4_cidr = "10.100.0.0/16"
+}
+
 resource "aws_eks_cluster" "cluster" {
     name = "${var.prefix}-cluster"
     role_arn = aws_iam_role.cluster.arn
@@ -55,24 +65,50 @@ resource "aws_eks_cluster" "cluster" {
         subnet_ids = aws_subnet.public[*].id
         security_group_ids = [aws_security_group.cluster.id]
     }
+    access_config {
+        authentication_mode = "API_AND_CONFIG_MAP"
+    }
+    kubernetes_network_config {
+      service_ipv4_cidr = local.service_ipv4_cidr
+    }
 }
 
-// node group based on spot instances
-resource "aws_eks_node_group" "spot" {
-    cluster_name = aws_eks_cluster.cluster.name
-    node_group_name = "${var.prefix}-spot"
-    node_role_arn = aws_iam_role.node.arn
-    subnet_ids = aws_subnet.public[*].id
-    scaling_config {
-        desired_size = 1
-        max_size = 1
-        min_size = 1
-    }
-    # capacity_type = "SPOT"
-    instance_types = ["t3.large"]
-    labels = {
-        "role" = "spot"
-    }
+resource "aws_eks_access_entry" "admin" {
+  cluster_name      = aws_eks_cluster.cluster.name
+  principal_arn     = var.eks_access_principal_arn
+}
+
+resource "aws_eks_access_policy_association" "admin" {
+  cluster_name = aws_eks_cluster.cluster.name
+  policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = var.eks_access_principal_arn
+  access_scope {
+    type       = "cluster"
+  }
+}
+
+module "eks_managed_node_group" {
+  source = "terraform-aws-modules/eks/aws//modules/eks-managed-node-group"
+  name = "spot"
+  cluster_name = aws_eks_cluster.cluster.name
+  cluster_version = aws_eks_cluster.cluster.version
+  create_iam_role = false
+  iam_role_arn = aws_iam_role.node.arn
+  subnet_ids = aws_subnet.public[*].id
+  cluster_primary_security_group_id = aws_security_group.cluster.id
+  vpc_security_group_ids = [aws_security_group.node.id]
+  instance_types = ["t3.large"]
+  capacity_type = "SPOT"
+  cluster_service_cidr = local.service_ipv4_cidr
+  metadata_options = {
+    http_tokens = "optional"
+    # As the default image is al2023 (like amazon-eks-node-al2023-x86_64-standard-1.31-v20250116 as of 2025/01/28),
+    # we need this for backward-compatibility.
+    http_put_response_hop_limit = 2
+  }
+  labels = {
+    "role" = "spot"
+  }
 }
 
 resource "aws_iam_role" "cluster" {
@@ -188,6 +224,38 @@ resource "aws_security_group" "cluster" {
         protocol = "-1"
         cidr_blocks = ["0.0.0.0/0"]
     }
+}
+
+resource "aws_security_group" "node" {
+    name = "${var.prefix}-node"
+    vpc_id = data.aws_vpc.vpc.id
+}
+
+resource "aws_security_group_rule" "node_ingress" {
+    security_group_id = aws_security_group.node.id
+    type = "ingress"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    source_security_group_id = aws_security_group.cluster.id
+}
+
+resource "aws_security_group_rule" "node_egress" {
+    security_group_id = aws_security_group.node.id
+    type = "egress"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+}
+
+resource "aws_security_group_rule" "node_ingress_self" {
+    security_group_id = aws_security_group.node.id
+    type = "ingress"
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    self = true
 }
 
 data "aws_availability_zones" "available" {

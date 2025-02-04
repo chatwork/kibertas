@@ -22,9 +22,29 @@ func TestFluentE2E(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 
+	prefix := os.Getenv("PREFIX")
+	if prefix == "" {
+		t.Skip("PREFIX is not set")
+	}
+
 	vpcID := os.Getenv("VPC_ID")
 	if vpcID == "" {
 		t.Skip("VPC_ID is not set")
+	}
+
+	terraformStateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if terraformStateBucket == "" {
+		t.Skip("TERRAFORM_STATE_BUCKET is not set")
+	}
+
+	terraformStateKey := os.Getenv("TERRAFORM_STATE_KEY")
+	if terraformStateKey == "" {
+		t.Skip("TERRAFORM_STATE_KEY is not set")
+	}
+
+	eksAccessPrincipalArn := os.Getenv("EKS_ACCESS_PRINCIPAL_ARN")
+	if eksAccessPrincipalArn == "" {
+		t.Skip("EKS_ACCESS_PRINCIPAL_ARN is not set")
 	}
 
 	h := testkit.New(t,
@@ -32,9 +52,15 @@ func TestFluentE2E(t *testing.T) {
 			&testkit.TerraformProvider{
 				WorkspacePath: "testdata/terraform",
 				Vars: map[string]string{
-					"prefix": "kibertas-fluentd-",
+					"prefix":                   prefix,
+					"region":                   "ap-northeast-1",
+					"vpc_id":                   vpcID,
+					"eks_access_principal_arn": eksAccessPrincipalArn,
+				},
+				BackendConfig: map[string]string{
+					"bucket": terraformStateBucket,
+					"key":    terraformStateKey,
 					"region": "ap-northeast-1",
-					"vpc_id": vpcID,
 				},
 			},
 			&testkit.KubectlProvider{},
@@ -45,6 +71,11 @@ func TestFluentE2E(t *testing.T) {
 	kc := h.KubernetesCluster(t)
 	s3Bucket := h.S3Bucket(t)
 	ns := h.KubernetesNamespace(t, testkit.KubeconfigPath(kc.KubeconfigPath))
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("KUBECONFIG=%s", kc.KubeconfigPath)
+		}
+	})
 
 	k := testkit.NewKubernetes(kc.KubeconfigPath)
 	testkit.PollUntil(t, func() bool {
