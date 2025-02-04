@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +87,25 @@ func TestFluentE2E(t *testing.T) {
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 	helm.AddRepo(t, "chatwork", "https://chatwork.github.io/charts")
 
+	// We need to create a pod to alter the /var/log/fluentd-s3 directory
+	// because the fluentd pod cannot create the directory.
+	// Note that the fluentd pod uses:
+	//   uid=999(fluent) gid=999(fluent) groups=999(fluent)
+	kctl := testkit.NewKubectl(kc.KubeconfigPath)
+	podYamlFile, err := filepath.Abs(filepath.Join("testdata", "fluentd-alter-log-dir.pod.yaml"))
+	require.NoError(t, err)
+	require.FileExists(t, podYamlFile)
+	kctl.Capture(t,
+		"create", "-f", podYamlFile,
+	)
+	t.Cleanup(func() {
+		kctl.Capture(t, "delete", "-f", podYamlFile)
+	})
+
+	testkit.PollUntil(t, func() bool {
+		return strings.Contains(kctl.Capture(t, "get", "pod", "fluentd-alter-log-dir"), "Completed")
+	}, 30*time.Second)
+
 	fluentdNs := "default"
 	logsPath := "logs"
 	helm.UpgradeOrInstall(t, "fluentd", "chatwork/fluentd", func(hc *testkit.HelmConfig) {
@@ -102,7 +123,7 @@ func TestFluentE2E(t *testing.T) {
 				"daemonset.conf": `<source>
   @type tail
   path /var/log/containers/*.log
-  pos_file /var/log/containers.log.pos
+  pos_file /var/log/fluentd/containers.log.pos
   tag kube.*
   exclude_path ["/var/log/containers/fluent*"]
   read_from_head true
@@ -139,7 +160,6 @@ func TestFluentE2E(t *testing.T) {
 
 	fluentdClusterRoleBindingName := "fluentd-cluster-admin-binding"
 
-	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 	defer func() {
 		if h.CleanupNeeded(t.Failed()) {
 			kctl.Capture(t, "delete", "clusterrolebinding", fluentdClusterRoleBindingName)
