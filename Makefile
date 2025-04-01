@@ -2,7 +2,7 @@ KIND_VERSION = 0.21.0
 KUBERNETES_VERSION = 1.29.1
 KIND_NODE_HASH = a0cc28af37cf39b019e2b448c54d1a3f789de32536cb5a5db61a49623e527144
 CERT_MANAGER_VERSION = 1.14.1
-INGRESS_NGINX_VERSION = 1.9.4
+INGRESS_NGINX_VERSION = $(shell grep "FROM registry.k8s.io/ingress-nginx/controller:" thirdparty/ingress-nginx/Dockerfile| cut -d':' -f2)
 
 GOLANGCI_LINT_VERSION=1.55.1
 TAG  ?= $(shell git describe --tags --abbrev=0 HEAD || echo dev)
@@ -84,13 +84,13 @@ delete-kind:
 
 .PHONY: apply-ingress-nginx
 apply-ingress-nginx:
-	@kubectl apply --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
+	@kubectl apply --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
 	@sleep 2
 	@kubectl -n ingress-nginx wait deploy -l app.kubernetes.io/instance=ingress-nginx --for=condition=available --timeout=60s
 
 .PHONY: delete-ingress-nginx
 delete-ingress-nginx:
-	@kubectl delete --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
+	@kubectl delete --wait=true -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml
 
 .PHONY: apply-cert-manager
 apply-cert-manager:
