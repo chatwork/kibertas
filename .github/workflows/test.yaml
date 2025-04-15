@@ -93,6 +93,7 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ secrets.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_KEY: ${{ secrets.TERRAFORM_STATE_KEY }}
           EKS_ACCESS_PRINCIPAL_ARN: ${{ env.EKS_ACCESS_PRINCIPAL_ARN }}
+          PREFIX: kibertas
   golangci:
     name: lint
     runs-on: ubuntu-latest
