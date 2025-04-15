@@ -17,3 +17,7 @@ updates:
   directory: "/"
   schedule:
     interval: "weekly"
+- package-ecosystem: "helm"
+  directory: "/thirdparty"
+  schedule:
+    interval: "weekly"
