@@ -68,6 +68,10 @@ jobs:
         with:
           aws-region: 'ap-northeast-1'
           role-to-assume: ${{ secrets.AWS_ROLE_TEST }}
+      - name: Set EKS_ACCESS_PRINCIPAL_ARN
+        id: aws-info
+        run: |
+          echo "EKS_ACCESS_PRINCIPAL_ARN=$(aws sts get-caller-identity --query Arn --output text)" >> $GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -86,6 +90,9 @@ jobs:
         env:
           KIND_IMAGE: ${{ matrix.kind_image }}
           VPC_ID: ${{ secrets.VPC_ID }}
+          TERRAFORM_STATE_BUCKET: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_KEY: ${{ secrets.TERRAFORM_STATE_KEY }}
+          EKS_ACCESS_PRINCIPAL_ARN: ${{ env.EKS_ACCESS_PRINCIPAL_ARN }}
   golangci:
     name: lint
     runs-on: ubuntu-latest
