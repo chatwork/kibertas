@@ -13,6 +13,7 @@ import (
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/config"
+	"github.com/chatwork/kibertas/internal/ktesting"
 	"github.com/chatwork/kibertas/util/notify"
 	"github.com/mumoshu/testkit"
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,12 @@ func TestIngressCheckE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+
+	chartDeps, err := ktesting.LoadHelmChartMeta("../../thirdparty/Chart.yaml")
+	require.NoError(t, err)
+	ingressNginxVersion, err := chartDeps.GetVersion("ingress-nginx")
+	require.NoError(t, err)
+	t.Logf("Using ingress-nginx version: %s", ingressNginxVersion)
 
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
@@ -62,6 +69,7 @@ func TestIngressCheckE2E(t *testing.T) {
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 	// See https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler#tldr
 	helm.AddRepo(t, "ingress-nginx", "https://kubernetes.github.io/ingress-nginx")
+	helm.UpdateRepo(t, "ingress-nginx")
 
 	ingressNginxNs := "default"
 	helm.UpgradeOrInstall(t, "my-ingress-nginx", "ingress-nginx/ingress-nginx", func(hc *testkit.HelmConfig) {
@@ -72,6 +80,7 @@ func TestIngressCheckE2E(t *testing.T) {
 		}
 
 		hc.Namespace = ingressNginxNs
+		hc.Version = ingressNginxVersion
 	})
 
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
