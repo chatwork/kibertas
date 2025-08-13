@@ -52,7 +52,7 @@ func NewIngress(checker *cmd.Checker, noDnsCheck bool) (*Ingress, error) {
 	checker.Chatwork.AddMessage(fmt.Sprintf("Ingress check application Namespace: %s\n", namespace))
 
 	resourceName := "sample"
-	externalHostName := "sample-skmt.cwtest.info"
+	externalHostName := "example.local"
 	ingressClassName := "alb"
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
