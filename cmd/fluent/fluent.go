@@ -50,9 +50,9 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 
 	resourceName := "burst-log-generator"
 
-	env := "cwtest"
+	env := "test"
 
-	logBucketName := "cwtest-kubernetes-logs"
+	logBucketName := "kubernetes-logs"
 
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
