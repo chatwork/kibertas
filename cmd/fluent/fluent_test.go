@@ -1,4 +1,4 @@
-//go:build ekstest
+//go:build !ekstest
 
 package fluent
 
