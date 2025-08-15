@@ -5,6 +5,7 @@ package fluent
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,46 +25,16 @@ func TestFluentE2E(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 
-	prefix := os.Getenv("PREFIX")
-	if prefix == "" {
-		t.Skip("PREFIX is not set")
-	}
-
-	vpcID := os.Getenv("VPC_ID")
-	if vpcID == "" {
-		t.Skip("VPC_ID is not set")
-	}
-
-	terraformStateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
-	if terraformStateBucket == "" {
-		t.Skip("TERRAFORM_STATE_BUCKET is not set")
-	}
-
-	terraformStateKey := os.Getenv("TERRAFORM_STATE_KEY")
-	if terraformStateKey == "" {
-		t.Skip("TERRAFORM_STATE_KEY is not set")
-	}
-
-	eksAccessPrincipalArn := os.Getenv("EKS_ACCESS_PRINCIPAL_ARN")
-	if eksAccessPrincipalArn == "" {
-		t.Skip("EKS_ACCESS_PRINCIPAL_ARN is not set")
-	}
+	s3Endpoint := "http://localstack.default.svc.cluster.local:4566"
+	s3Region := "us-east-1"
+	fluentdNs := "default"
+	logsPath := "logs"
+	s3Bucket := "kubernetes-logs"
 
 	h := testkit.New(t,
 		testkit.Providers(
-			&testkit.TerraformProvider{
-				WorkspacePath: "testdata/terraform",
-				Vars: map[string]string{
-					"prefix":                   prefix,
-					"region":                   "ap-northeast-1",
-					"vpc_id":                   vpcID,
-					"eks_access_principal_arn": eksAccessPrincipalArn,
-				},
-				BackendConfig: map[string]string{
-					"bucket": terraformStateBucket,
-					"key":    terraformStateKey,
-					"region": "ap-northeast-1",
-				},
+			&testkit.KindProvider{
+				Image: os.Getenv("KIND_IMAGE"),
 			},
 			&testkit.KubectlProvider{},
 		),
@@ -71,7 +42,6 @@ func TestFluentE2E(t *testing.T) {
 	)
 
 	kc := h.KubernetesCluster(t)
-	s3Bucket := h.S3Bucket(t)
 	ns := h.KubernetesNamespace(t, testkit.KubeconfigPath(kc.KubeconfigPath))
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -84,6 +54,8 @@ func TestFluentE2E(t *testing.T) {
 		return len(k.ListReadyNodeNames(t)) == 1
 	}, 20*time.Second)
 
+	kctl := testkit.NewKubectl(kc.KubeconfigPath)
+
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 	helm.AddRepo(t, "chatwork", "https://chatwork.github.io/charts")
 
@@ -91,7 +63,6 @@ func TestFluentE2E(t *testing.T) {
 	// because the fluentd pod cannot create the directory.
 	// Note that the fluentd pod uses:
 	//   uid=999(fluent) gid=999(fluent) groups=999(fluent)
-	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 	podYamlFile, err := filepath.Abs(filepath.Join("testdata", "fluentd-alter-log-dir.pod.yaml"))
 	require.NoError(t, err)
 	require.FileExists(t, podYamlFile)
@@ -106,8 +77,9 @@ func TestFluentE2E(t *testing.T) {
 		return strings.Contains(kctl.Capture(t, "get", "pod", "fluentd-alter-log-dir"), "Completed")
 	}, 30*time.Second)
 
-	fluentdNs := "default"
-	logsPath := "logs"
+	localhostS3Endpoint := deployLocalStack(t, kctl, h)
+	prepareFluentdLogDestinationBucket(t, localhostS3Endpoint, s3Bucket)
+
 	helm.UpgradeOrInstall(t, "fluentd", "chatwork/fluentd", func(hc *testkit.HelmConfig) {
 		hc.Values = map[string]interface{}{
 			"dasemonset": map[string]interface{}{
@@ -139,10 +111,15 @@ func TestFluentE2E(t *testing.T) {
 </filter>` + fmt.Sprintf(`
 <match kube.**>
   @type s3
+  s3_endpoint %s
   s3_bucket %s
-  s3_region ap-northeast-1
+  s3_region %s
   path %s/
   flush_interval 10s
+  force_path_style true
+  use_ssl false
+  aws_key_id test
+  aws_sec_key test
   <buffer>
     @type file
     path /var/log/fluentd-s3
@@ -151,7 +128,7 @@ func TestFluentE2E(t *testing.T) {
     chunk_limit_size 256m
   </buffer>
 </match>
-`, s3Bucket.Name, logsPath),
+`, s3Endpoint, s3Bucket, s3Region, logsPath),
 			},
 		}
 
@@ -171,7 +148,8 @@ func TestFluentE2E(t *testing.T) {
 	}
 
 	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-	os.Setenv("LOG_BUCKET_NAME", s3Bucket.Name)
+	os.Setenv("LOG_BUCKET_NAME", s3Bucket)
+	os.Setenv("USE_PATH_STYLE", "true")
 	os.Setenv("RESOURCE_NAMESPACE", ns.Name)
 	os.Setenv("LOG_PATH", logsPath)
 
@@ -181,6 +159,15 @@ func TestFluentE2E(t *testing.T) {
 	chatwork := &notify.Chatwork{
 		Logger: logger,
 	}
+
+	// Set AWS environment variables for LocalStack
+	// kibertas internally uses AWS SDK, so these environment variables
+	// configure the SDK to connect to LocalStack instead of real AWS
+	os.Setenv("AWS_ENDPOINT_URL", localhostS3Endpoint)
+	os.Setenv("AWS_ACCESS_KEY_ID", "test")
+	os.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+	os.Setenv("AWS_DEFAULT_REGION", s3Region)
+
 	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 3*time.Minute)
 	fluent, err := NewFluent(checker)
 	if err != nil {
@@ -192,4 +179,52 @@ func TestFluentE2E(t *testing.T) {
 	}
 
 	require.NoError(t, fluent.Check())
+}
+
+func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) string {
+	localstackYamlFile, err := filepath.Abs(filepath.Join("testdata", "localstack.yaml"))
+	require.NoError(t, err)
+	require.FileExists(t, localstackYamlFile)
+	kctl.Capture(t, "apply", "-f", localstackYamlFile)
+	t.Cleanup(func() {
+		if h.CleanupNeeded(t.Failed()) {
+			kctl.Capture(t, "delete", "-f", localstackYamlFile)
+		}
+	})
+
+	testkit.PollUntil(t, func() bool {
+		output := kctl.Capture(t, "get", "pod", "-l", "app=localstack", "-o", "jsonpath={.items[0].status.conditions[?(@.type=='Ready')].status}")
+		return strings.Contains(output, "True")
+	}, 60*time.Second)
+
+	localstackPort := "14566"
+	localhostS3Endpoint := fmt.Sprintf("http://localhost:%s", localstackPort)
+
+	go func() {
+		kctl.Capture(t, "port-forward", "deployment/localstack", localstackPort+":4566")
+	}()
+
+	testkit.PollUntil(t, func() bool {
+		resp, err := http.Get(localhostS3Endpoint + "/_localstack/health")
+		if err != nil {
+			t.Logf("Port-forward health check failed: %v", err)
+			return false
+		}
+		defer resp.Body.Close()
+		body := make([]byte, 1024)
+		n, _ := resp.Body.Read(body)
+		output := string(body[:n])
+		return strings.Contains(output, "s3") && (strings.Contains(output, "running") || strings.Contains(output, "available"))
+	}, 60*time.Second)
+	return localhostS3Endpoint
+}
+
+func prepareFluentdLogDestinationBucket(t *testing.T, s3Endpoint string, s3Bucket string) {
+	req, err := http.NewRequest("PUT", s3Endpoint+"/"+s3Bucket, nil)
+	require.NoError(t, err)
+	client := &http.Client{}
+	bucketResp, err := client.Do(req)
+	if err == nil {
+		bucketResp.Body.Close()
+	}
 }
