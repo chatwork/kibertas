@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
@@ -29,6 +30,7 @@ type Fluent struct {
 	Clientset     *kubernetes.Clientset
 	LogBucketName string
 	LogPath       string
+	UsePathStyle  bool
 	ResourceName  string
 	ReplicaCount  int
 	Awscfg        aws.Config
@@ -54,6 +56,8 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 
 	logBucketName := "kubernetes-logs"
 
+	usePathStyle := false
+
 	if v := os.Getenv("RESOURCE_NAME"); v != "" {
 		resourceName = v
 	}
@@ -64,6 +68,15 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 
 	if v := os.Getenv("LOG_BUCKET_NAME"); v != "" {
 		logBucketName = v
+	}
+
+	if v := os.Getenv("USE_PATH_STYLE"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			usePathStyle = false
+		} else {
+			usePathStyle = b
+		}
 	}
 
 	// path s3bucket/fluentd/env(test,stg,etc...)/namespace/dt=yyyymmdd
@@ -89,6 +102,7 @@ func NewFluent(checker *cmd.Checker) (*Fluent, error) {
 		ResourceName:  resourceName,
 		LogBucketName: logBucketName,
 		LogPath:       logPath,
+		UsePathStyle:  usePathStyle,
 		Awscfg:        awsConfig,
 	}, nil
 }
@@ -174,7 +188,9 @@ func (f *Fluent) cleanUpResources() error {
 }
 
 func (f *Fluent) checkS3Object() error {
-	client := s3.NewFromConfig(f.Awscfg)
+	client := s3.NewFromConfig(f.Awscfg, func(o *s3.Options) {
+		o.UsePathStyle = f.UsePathStyle
+	})
 	t := time.Now()
 	targetBucket := f.LogBucketName
 	targetPrefix := f.LogPath

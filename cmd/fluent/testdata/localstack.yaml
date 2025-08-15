@@ -1,0 +1,78 @@
+# LocalStack Deployment for Fluent E2E Testing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localstack
+  namespace: default
+  labels:
+    app: localstack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: localstack
+  template:
+    metadata:
+      labels:
+        app: localstack
+    spec:
+      containers:
+      - name: localstack
+        image: localstack/localstack:latest
+        ports:
+        - containerPort: 4566
+          name: api
+          protocol: TCP
+        env:
+        - name: SERVICES
+          value: "s3"
+        - name: DEBUG
+          value: "1"
+        - name: DISABLE_CORS_CHECKS
+          value: "1"
+        - name: SKIP_SSL_CERT_DOWNLOAD
+          value: "1"
+        - name: PERSIST_DATA
+          value: "0"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "125m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /_localstack/health
+            port: 4566
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /_localstack/health
+            port: 4566
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+      restartPolicy: Always
+---
+# LocalStack Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: localstack
+  namespace: default
+  labels:
+    app: localstack
+spec:
+  selector:
+    app: localstack
+  ports:
+  - port: 4566
+    targetPort: 4566
+    protocol: TCP
+    name: api
+  type: ClusterIP
