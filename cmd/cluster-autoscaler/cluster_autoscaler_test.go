@@ -22,26 +22,14 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 
-	vpcID := os.Getenv("VPC_ID")
-	if vpcID == "" {
-		t.Skip("VPC_ID is not set")
-	}
-
 	appName := "sample-for-scale"
 	capacityType := "SPOT"
 	// capacityType := "ON_DEMAND"
 
 	h := testkit.New(t,
 		testkit.Providers(
-			&testkit.TerraformProvider{
-				WorkspacePath: "testdata/terraform",
-				Vars: map[string]string{
-					"prefix":                        "kibertas-ca",
-					"region":                        "ap-northeast-1",
-					"vpc_id":                        vpcID,
-					"capacity_type":                 capacityType,
-					"node_template_app_label_value": appName,
-				},
+			&testkit.KindProvider{
+				Image: os.Getenv("KIND_IMAGE"),
 			},
 			&testkit.KubectlProvider{},
 		),
