@@ -17,14 +17,19 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+type DeploymentOption struct {
+	Tolerations []apiv1.Toleration
+}
+
 type ClusterAutoscaler struct {
 	*cmd.Checker
-	Clientset      *kubernetes.Clientset
-	Namespace      string
-	ResourceName   string
-	ReplicaCount   int
-	NodeLabelKey   string
-	NodeLabelValue string
+	Clientset        *kubernetes.Clientset
+	Namespace        string
+	ResourceName     string
+	ReplicaCount     int
+	NodeLabelKey     string
+	NodeLabelValue   string
+	DeploymentOption DeploymentOption
 }
 
 func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
@@ -59,12 +64,13 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 	}
 
 	return &ClusterAutoscaler{
-		Checker:        checker,
-		Clientset:      k8sclientset,
-		Namespace:      namespace,
-		ResourceName:   resourceName,
-		NodeLabelKey:   nodeLabelKey,
-		NodeLabelValue: nodeLabelValue,
+		Checker:          checker,
+		Clientset:        k8sclientset,
+		Namespace:        namespace,
+		ResourceName:     resourceName,
+		NodeLabelKey:     nodeLabelKey,
+		NodeLabelValue:   nodeLabelValue,
+		DeploymentOption: DeploymentOption{Tolerations: []apiv1.Toleration{}},
 	}, nil
 }
 
@@ -165,6 +171,7 @@ func (c *ClusterAutoscaler) createDeploymentObject() *appsv1.Deployment {
 					},
 				},
 				Spec: apiv1.PodSpec{
+					Tolerations: c.DeploymentOption.Tolerations,
 					Affinity: &apiv1.Affinity{
 						NodeAffinity: &apiv1.NodeAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
