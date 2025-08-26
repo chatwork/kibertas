@@ -42,9 +42,10 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
 	k := testkit.NewKubernetes(kc.KubeconfigPath)
+
+	const controlPlaneNodes = 1 // Kind cluster has 1 control-plane node
 	testkit.PollUntil(t, func() bool {
-		// Only the control-plane node should be counted as Ready
-		return len(k.ListReadyNodeNames(t)) == 1
+		return len(k.ListReadyNodeNames(t)) == controlPlaneNodes
 	}, 20*time.Second)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
@@ -85,11 +86,17 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 		t.Error("Expected clusterautoscaler instance, got nil")
 	}
 
-	// Scale from 1 to 2
+	// Scale up: add 1 data-plane node
 	require.NoError(t, clusterautoscaler.Check())
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
 		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == 2, nil
+		return len(nodes) == controlPlaneNodes+1, nil
+	}))
+
+	// Scale down: CA should remove the data-plane node after Check() cleans up its test pods
+	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+		nodes := k.ListReadyNodeNames(t)
+		return len(nodes) == controlPlaneNodes, nil
 	}))
 }
 
