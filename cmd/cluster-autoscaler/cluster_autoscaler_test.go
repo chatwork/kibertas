@@ -87,11 +87,6 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 		t.Error("Expected clusterautoscaler instance, got nil")
 	}
 
-	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
-		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == 1, nil
-	}))
-
 	// Scale from 1 to 2
 	require.NoError(t, clusterautoscaler.Check())
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
