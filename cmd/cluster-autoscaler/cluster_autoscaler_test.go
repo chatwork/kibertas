@@ -72,16 +72,14 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 
 	// Configure tolerations for kwok provider nodes
 	// This allows test pods to be scheduled on kwok-simulated nodes with taints
-	clusterautoscaler.SetDeploymentOption(DeploymentOption{
-		Tolerations: []apiv1.Toleration{
-			{
-				Key:      "kwok-provider",
-				Operator: apiv1.TolerationOpEqual,
-				Value:    "true",
-				Effect:   apiv1.TaintEffectNoSchedule,
-			},
+	clusterautoscaler.DeploymentOption.Tolerations = []apiv1.Toleration{
+		{
+			Key:      "kwok-provider",
+			Operator: apiv1.TolerationOpEqual,
+			Value:    "true",
+			Effect:   apiv1.TaintEffectNoSchedule,
 		},
-	})
+	}
 
 	if clusterautoscaler == nil {
 		t.Error("Expected clusterautoscaler instance, got nil")

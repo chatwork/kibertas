@@ -74,11 +74,6 @@ func NewClusterAutoscaler(checker *cmd.Checker) (*ClusterAutoscaler, error) {
 	}, nil
 }
 
-// SetDeploymentOption SithDeploymentOption sets deployment options for the cluster autoscaler test
-func (c *ClusterAutoscaler) SetDeploymentOption(opt DeploymentOption) {
-	c.DeploymentOption = opt
-}
-
 // Check is check cluster-autoscaler
 // replicaをノード数+1でdeploymentを作成する
 func (c *ClusterAutoscaler) Check() error {
