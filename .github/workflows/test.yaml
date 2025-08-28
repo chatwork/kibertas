@@ -6,11 +6,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # We runs only one job at a time to prevent contention on subnet CIDRs and EKS cluster names.
-  # This is needed because we share the same AWS account and VPC for all the tests.
-  group: ${{ github.workflow }}
-
 jobs:
   test:
     runs-on: ubuntu-latest
