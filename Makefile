@@ -36,9 +36,6 @@ test:
 e2e/kindtest:
 	go test -timeout 20m -v ./cmd/...
 
-.PHONY: e2e/ekstest
-e2e/ekstest:
-	go test -timeout 55m -v ./cmd/... -tags=ekstest
 
 # This will produce following images for testing locally:
 # - examplecom/kibertas:canary-arm64

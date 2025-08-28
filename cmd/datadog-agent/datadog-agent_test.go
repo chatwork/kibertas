@@ -1,5 +1,3 @@
-//go:build !ekstest
-
 package datadogagent
 
 import (
