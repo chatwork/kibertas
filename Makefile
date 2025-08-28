@@ -4,7 +4,7 @@ KIND_NODE_HASH = a0cc28af37cf39b019e2b448c54d1a3f789de32536cb5a5db61a49623e52714
 CERT_MANAGER_VERSION = 1.14.1
 INGRESS_NGINX_VERSION = $(shell grep "FROM registry.k8s.io/ingress-nginx/controller:" thirdparty/ingress-nginx/Dockerfile| cut -d':' -f2)
 
-GOLANGCI_LINT_VERSION=1.55.1
+GOLANGCI_LINT_VERSION=1.59.0
 TAG  ?= $(shell git describe --tags --abbrev=0 HEAD || echo dev)
 DATE_FMT = +"%Y-%m-%dT%H:%M:%S%z"
 ifdef SOURCE_DATE_EPOCH
