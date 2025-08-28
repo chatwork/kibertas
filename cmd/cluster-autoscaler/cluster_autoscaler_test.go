@@ -68,6 +68,9 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClusterAutoscaler: %s", err)
 	}
+	if clusterautoscaler == nil {
+		t.Fatal("Expected clusterautoscaler instance, got nil")
+	}
 
 	// Configure tolerations for kwok provider nodes
 	// This allows test pods to be scheduled on kwok-simulated nodes with taints
@@ -78,10 +81,6 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 			Value:    "true",
 			Effect:   apiv1.TaintEffectNoSchedule,
 		},
-	}
-
-	if clusterautoscaler == nil {
-		t.Error("Expected clusterautoscaler instance, got nil")
 	}
 
 	// Scale up: add 1 data-plane node
