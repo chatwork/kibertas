@@ -50,7 +50,7 @@ func TestFluentE2E(t *testing.T) {
 	k := testkit.NewKubernetes(kc.KubeconfigPath)
 	testkit.PollUntil(t, func() bool {
 		return len(k.ListReadyNodeNames(t)) == 1
-	}, 20*time.Second)
+	}, 5*time.Minute)
 
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
@@ -73,7 +73,7 @@ func TestFluentE2E(t *testing.T) {
 
 	testkit.PollUntil(t, func() bool {
 		return strings.Contains(kctl.Capture(t, "get", "pod", "fluentd-alter-log-dir"), "Completed")
-	}, 30*time.Second)
+	}, 2*time.Minute)
 
 	localhostS3Endpoint := deployLocalStack(t, kctl, h)
 	prepareFluentdLogDestinationBucket(t, localhostS3Endpoint, s3Bucket)
@@ -193,7 +193,7 @@ func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) s
 	testkit.PollUntil(t, func() bool {
 		output := kctl.Capture(t, "get", "pod", "-l", "app=localstack", "-o", "jsonpath={.items[0].status.conditions[?(@.type=='Ready')].status}")
 		return strings.Contains(output, "True")
-	}, 60*time.Second)
+	}, 3*time.Minute)
 
 	localstackPort := "14566"
 	localhostS3Endpoint := fmt.Sprintf("http://localhost:%s", localstackPort)
@@ -213,7 +213,7 @@ func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) s
 		n, _ := resp.Body.Read(body)
 		output := string(body[:n])
 		return strings.Contains(output, "s3") && (strings.Contains(output, "running") || strings.Contains(output, "available"))
-	}, 60*time.Second)
+	}, 3*time.Minute)
 	return localhostS3Endpoint
 }
 

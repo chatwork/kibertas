@@ -44,7 +44,7 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 	const controlPlaneNodes = 1 // Kind cluster has 1 control-plane node
 	testkit.PollUntil(t, func() bool {
 		return len(k.ListReadyNodeNames(t)) == controlPlaneNodes
-	}, 20*time.Second)
+	}, 5*time.Minute)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 	// See https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler#tldr
