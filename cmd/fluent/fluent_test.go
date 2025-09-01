@@ -3,8 +3,10 @@ package fluent
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -75,7 +77,7 @@ func TestFluentE2E(t *testing.T) {
 		return strings.Contains(kctl.Capture(t, "get", "pod", "fluentd-alter-log-dir"), "Completed")
 	}, 2*time.Minute)
 
-	localhostS3Endpoint := deployLocalStack(t, kctl, h)
+	localhostS3Endpoint := deployLocalStack(t, kc.KubeconfigPath, kctl, h)
 	prepareFluentdLogDestinationBucket(t, localhostS3Endpoint, s3Bucket)
 
 	helm.UpgradeOrInstall(t, "fluentd", "chatwork/fluentd", func(hc *testkit.HelmConfig) {
@@ -179,7 +181,7 @@ func TestFluentE2E(t *testing.T) {
 	require.NoError(t, fluent.Check())
 }
 
-func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) string {
+func deployLocalStack(t *testing.T, kubeconfigPath string, kctl *testkit.Kubectl, h *testkit.TestKit) string {
 	localstackYamlFile, err := filepath.Abs(filepath.Join("testdata", "localstack.yaml"))
 	require.NoError(t, err)
 	require.FileExists(t, localstackYamlFile)
@@ -196,11 +198,30 @@ func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) s
 	}, 3*time.Minute)
 
 	localstackPort := "14566"
-	localhostS3Endpoint := fmt.Sprintf("http://localhost:%s", localstackPort)
+	localhostS3Endpoint := fmt.Sprintf("http://127.0.0.1:%s", localstackPort)
 
-	go func() {
-		kctl.Capture(t, "port-forward", "deployment/localstack", localstackPort+":4566")
-	}()
+	// Start kubectl port-forward as a background process and manage its lifecycle
+	command := exec.Command(
+		"kubectl",
+		"--kubeconfig", kubeconfigPath,
+		"-n", "default",
+		"port-forward",
+		"service/localstack",
+		localstackPort+":4566",
+		"--address", "127.0.0.1",
+	)
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	if err := command.Start(); err != nil {
+		t.Fatalf("failed to start port-forward: %v", err)
+	}
+	t.Cleanup(func() {
+		// Ensure the port-forward process is terminated without failing the test
+		if command.Process != nil {
+			_ = command.Process.Kill()
+		}
+		_ = command.Wait()
+	})
 
 	testkit.PollUntil(t, func() bool {
 		resp, err := http.Get(localhostS3Endpoint + "/_localstack/health")
