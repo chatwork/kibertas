@@ -31,12 +31,14 @@ func TestFluentE2E(t *testing.T) {
 	logsPath := "logs"
 	s3Bucket := "kubernetes-logs"
 
+	// Put KubectlProvider before KindProvider so namespaces/configmaps
+	// are cleaned up before the Kind cluster is deleted.
 	h := testkit.New(t,
 		testkit.Providers(
+			&testkit.KubectlProvider{},
 			&testkit.KindProvider{
 				Image: os.Getenv("KIND_IMAGE"),
 			},
-			&testkit.KubectlProvider{},
 		),
 		testkit.RetainResourcesOnFailure(),
 	)
