@@ -132,7 +132,7 @@ func StartProcess(t *testing.T, name, kubeconfig string) *ProcessHandle {
 	handle := &ProcessHandle{}
 
 	env := os.Environ()
-	env = append(env, "KUECONFIG="+kubeconfig)
+	env = append(env, "KUBECONFIG="+kubeconfig)
 
 	proc, err := os.StartProcess(name, []string{}, &os.ProcAttr{
 		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},

@@ -3,8 +3,10 @@ package fluent
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,12 +31,14 @@ func TestFluentE2E(t *testing.T) {
 	logsPath := "logs"
 	s3Bucket := "kubernetes-logs"
 
+	// Put KubectlProvider before KindProvider so namespaces/configmaps
+	// are cleaned up before the Kind cluster is deleted.
 	h := testkit.New(t,
 		testkit.Providers(
+			&testkit.KubectlProvider{},
 			&testkit.KindProvider{
 				Image: os.Getenv("KIND_IMAGE"),
 			},
-			&testkit.KubectlProvider{},
 		),
 		testkit.RetainResourcesOnFailure(),
 	)
@@ -50,7 +54,7 @@ func TestFluentE2E(t *testing.T) {
 	k := testkit.NewKubernetes(kc.KubeconfigPath)
 	testkit.PollUntil(t, func() bool {
 		return len(k.ListReadyNodeNames(t)) == 1
-	}, 20*time.Second)
+	}, 5*time.Minute)
 
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 
@@ -73,9 +77,9 @@ func TestFluentE2E(t *testing.T) {
 
 	testkit.PollUntil(t, func() bool {
 		return strings.Contains(kctl.Capture(t, "get", "pod", "fluentd-alter-log-dir"), "Completed")
-	}, 30*time.Second)
+	}, 2*time.Minute)
 
-	localhostS3Endpoint := deployLocalStack(t, kctl, h)
+	localhostS3Endpoint := deployLocalStack(t, kc.KubeconfigPath, kctl, h)
 	prepareFluentdLogDestinationBucket(t, localhostS3Endpoint, s3Bucket)
 
 	helm.UpgradeOrInstall(t, "fluentd", "chatwork/fluentd", func(hc *testkit.HelmConfig) {
@@ -179,7 +183,7 @@ func TestFluentE2E(t *testing.T) {
 	require.NoError(t, fluent.Check())
 }
 
-func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) string {
+func deployLocalStack(t *testing.T, kubeconfigPath string, kctl *testkit.Kubectl, h *testkit.TestKit) string {
 	localstackYamlFile, err := filepath.Abs(filepath.Join("testdata", "localstack.yaml"))
 	require.NoError(t, err)
 	require.FileExists(t, localstackYamlFile)
@@ -193,14 +197,33 @@ func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) s
 	testkit.PollUntil(t, func() bool {
 		output := kctl.Capture(t, "get", "pod", "-l", "app=localstack", "-o", "jsonpath={.items[0].status.conditions[?(@.type=='Ready')].status}")
 		return strings.Contains(output, "True")
-	}, 60*time.Second)
+	}, 3*time.Minute)
 
 	localstackPort := "14566"
-	localhostS3Endpoint := fmt.Sprintf("http://localhost:%s", localstackPort)
+	localhostS3Endpoint := fmt.Sprintf("http://127.0.0.1:%s", localstackPort)
 
-	go func() {
-		kctl.Capture(t, "port-forward", "deployment/localstack", localstackPort+":4566")
-	}()
+	// Start kubectl port-forward as a background process and manage its lifecycle
+	command := exec.Command(
+		"kubectl",
+		"--kubeconfig", kubeconfigPath,
+		"-n", "default",
+		"port-forward",
+		"service/localstack",
+		localstackPort+":4566",
+		"--address", "127.0.0.1",
+	)
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	if err := command.Start(); err != nil {
+		t.Fatalf("failed to start port-forward: %v", err)
+	}
+	t.Cleanup(func() {
+		// Ensure the port-forward process is terminated without failing the test
+		if command.Process != nil {
+			_ = command.Process.Kill()
+		}
+		_ = command.Wait()
+	})
 
 	testkit.PollUntil(t, func() bool {
 		resp, err := http.Get(localhostS3Endpoint + "/_localstack/health")
@@ -213,7 +236,7 @@ func deployLocalStack(t *testing.T, kctl *testkit.Kubectl, h *testkit.TestKit) s
 		n, _ := resp.Body.Read(body)
 		output := string(body[:n])
 		return strings.Contains(output, "s3") && (strings.Contains(output, "running") || strings.Contains(output, "available"))
-	}, 60*time.Second)
+	}, 3*time.Minute)
 	return localhostS3Endpoint
 }
 
