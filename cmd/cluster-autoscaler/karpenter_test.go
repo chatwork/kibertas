@@ -22,8 +22,6 @@ import (
 )
 
 func TestKarpenterScaleUpFromNonZero(t *testing.T) {
-	t.Parallel()
-
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
@@ -57,8 +55,18 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	}, 5*time.Minute)
 	t.Logf("Kind cluster is ready with %d control-plane nodes", controlPlaneNodes)
 
+	// kind get clusters
+	command := exec.CommandContext(context.Background(), "kind", "get", "clusters")
+	out, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to get kind clusters: %v\n%s", err, string(out))
+	}
+	t.Logf(string(out))
+
 	clusterName := kctl.Capture(t, "config", "current-context")
 	clusterName = strings.TrimPrefix(strings.TrimSpace(clusterName), "kind-")
+
+	t.Logf("Cluster name is: %s", clusterName)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 

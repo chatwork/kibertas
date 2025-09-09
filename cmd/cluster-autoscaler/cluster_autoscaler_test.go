@@ -17,8 +17,6 @@ import (
 )
 
 func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
-	t.Parallel()
-
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
