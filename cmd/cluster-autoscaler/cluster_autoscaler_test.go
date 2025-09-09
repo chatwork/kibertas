@@ -151,4 +151,5 @@ func helmInstallKwok(t *testing.T, helm *testkit.Helm) {
 	helm.UpgradeOrInstall(t, "kwok-stage-fast", "kwok/stage-fast", func(hc *testkit.HelmConfig) {
 		hc.Namespace = "kube-system"
 	})
+	t.Logf("KWOK installed successfully")
 }

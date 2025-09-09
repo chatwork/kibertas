@@ -53,9 +53,54 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	clusterName := kctl.Capture(t, "config", "current-context")
 	clusterName = strings.TrimPrefix(clusterName, "kind-")
 
+	helm := testkit.NewHelm(kc.KubeconfigPath)
+
+	helmInstallKarpenter(t, clusterName, helm, kctl)
+
+	helmInstallKwok(t, helm)
+
+	os.Setenv("RESOURCE_NAME", appName)
+	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
+	os.Setenv("NODE_LABEL_KEY", nodeLabelKey)
+	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
+
+	logger := func() *logrus.Entry {
+		return logrus.NewEntry(logrus.New())
+	}
+	chatwork := &notify.Chatwork{Logger: logger}
+	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 7*time.Minute)
+	clusterautoscaler, err := NewClusterAutoscaler(checker)
+	require.NoError(t, err)
+	require.NotNil(t, clusterautoscaler)
+
+	// Allow pods to schedule on kwok-simulated nodes with kwok-provider taint
+	clusterautoscaler.DeploymentOption.Tolerations = []apiv1.Toleration{
+		{
+			Key:      "kwok-provider",
+			Operator: apiv1.TolerationOpEqual,
+			Value:    "true",
+			Effect:   apiv1.TaintEffectNoSchedule,
+		},
+	}
+
+	// Scale up by 1 data-plane node
+	require.NoError(t, clusterautoscaler.Check())
+	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
+		nodes := k.ListReadyNodeNames(t)
+		return len(nodes) == controlPlaneNodes+1, nil
+	}))
+
+	// Scale to zero (or the original number of nodes)
+	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 10*time.Minute, false, func(ctx context.Context) (bool, error) {
+		nodes := k.ListReadyNodeNames(t)
+		return len(nodes) == controlPlaneNodes, nil
+	}))
+}
+
+func helmInstallKarpenter(t *testing.T, clusterName string, helm *testkit.Helm, kctl *testkit.Kubectl) {
 	if _, err := exec.LookPath("ko"); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
+		t.Cleanup(cancel)
 		cmd := exec.CommandContext(ctx, "ko", "build", "-B", "sigs.k8s.io/karpenter/kwok")
 		cmd.Dir = filepath.Join("..", "..", "submodules", "karpenter")
 		cmd.Env = append(os.Environ(),
@@ -71,8 +116,6 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	} else {
 		t.Fatalf("ko not found in PATH.")
 	}
-
-	helm := testkit.NewHelm(kc.KubeconfigPath)
 
 	clusterautoscalerNs := "default"
 	helm.UpgradeOrInstall(t, "karpenter", "../../submodules/karpenter/kwok/charts", func(hc *testkit.HelmConfig) {
@@ -117,44 +160,4 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	}, 1*time.Minute)
 
 	t.Logf("Karpenter NodePool and NodeClass applied successfully")
-
-	helmInstallKwok(t, helm)
-	t.Logf("KWOK installed successfully")
-
-	os.Setenv("RESOURCE_NAME", appName)
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-	os.Setenv("NODE_LABEL_KEY", nodeLabelKey)
-	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
-
-	logger := func() *logrus.Entry {
-		return logrus.NewEntry(logrus.New())
-	}
-	chatwork := &notify.Chatwork{Logger: logger}
-	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 7*time.Minute)
-	clusterautoscaler, err := NewClusterAutoscaler(checker)
-	require.NoError(t, err)
-	require.NotNil(t, clusterautoscaler)
-
-	// Allow pods to schedule on kwok-simulated nodes with kwok-provider taint
-	clusterautoscaler.DeploymentOption.Tolerations = []apiv1.Toleration{
-		{
-			Key:      "kwok-provider",
-			Operator: apiv1.TolerationOpEqual,
-			Value:    "true",
-			Effect:   apiv1.TaintEffectNoSchedule,
-		},
-	}
-
-	// Scale up by 1 data-plane node
-	require.NoError(t, clusterautoscaler.Check())
-	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
-		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == controlPlaneNodes+1, nil
-	}))
-
-	// Scale to zero (or the original number of nodes)
-	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 10*time.Minute, false, func(ctx context.Context) (bool, error) {
-		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == controlPlaneNodes, nil
-	}))
 }
