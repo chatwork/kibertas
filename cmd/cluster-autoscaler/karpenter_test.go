@@ -51,7 +51,7 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	t.Logf("Kind cluster is ready with %d control-plane nodes", controlPlaneNodes)
 
 	clusterName := kctl.Capture(t, "config", "current-context")
-	clusterName = strings.TrimPrefix(clusterName, "kind-")
+	clusterName = strings.TrimPrefix(strings.TrimSpace(clusterName), "kind-")
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 
