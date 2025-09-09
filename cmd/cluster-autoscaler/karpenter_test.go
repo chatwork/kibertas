@@ -95,6 +95,9 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 
 	t.Logf("Cluster name is: %s", clusterName)
 
+	// このテストで作成した Kind クラスタが、kind CLI からも確実に見える状態になるまで待機
+	waitForKindNodes(t, clusterName, 2*time.Minute)
+
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 
 	helmInstallKwok(t, helm)
@@ -227,4 +230,33 @@ func readyNodeCount(t *testing.T, kctl *testkit.Kubectl) int {
 		}
 	}
 	return ready
+}
+
+// hasKindNodes は `kind get nodes --name <cluster>` でノードが検出できるかを返す
+func hasKindNodes(t *testing.T, name string) bool {
+	if _, err := exec.LookPath("kind"); err != nil {
+		t.Fatalf("kind CLI not found in PATH: %v", err)
+	}
+	out, err := exec.Command("kind", "get", "nodes", "--name", name).CombinedOutput()
+	if err != nil {
+		t.Logf("kind get nodes failed for %s: %v\n%s", name, err, string(out))
+		return false
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	return len(lines) > 0 && strings.TrimSpace(lines[0]) != ""
+}
+
+// waitForKindNodes は `kind get nodes --name <cluster>` が非空になるまで待機
+func waitForKindNodes(t *testing.T, name string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for {
+		if hasKindNodes(t, name) {
+			return
+		}
+		if time.Now().After(deadline) {
+			out, _ := exec.Command("kind", "get", "nodes", "--name", name).CombinedOutput()
+			t.Fatalf("kind does not see nodes for cluster %q within %s. output=\n%s", name, timeout, string(out))
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
