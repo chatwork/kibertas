@@ -49,7 +49,7 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 
 	clusterautoscalerNs := "default"
-	helm.UpgradeOrInstall(t, "karpenter", "testdata/karpenter/kwok/charts", func(hc *testkit.HelmConfig) {
+	helm.UpgradeOrInstall(t, "karpenter", "../../submodules/karpenter/kwok/charts", func(hc *testkit.HelmConfig) {
 		hc.Values = map[string]interface{}{
 			"controller": map[string]interface{}{
 				"image": map[string]interface{}{
