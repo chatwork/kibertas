@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"strings"
 )
 
 type K8s struct {
@@ -81,6 +82,12 @@ func (k *K8s) CreateDeployment(ctx context.Context, deployment *appsv1.Deploymen
 	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		deployment, err := deploymentsClient.Get(ctx, deployment.Name, metav1.GetOptions{})
 		if err != nil {
+			// Treat temporary API server connection errors as transient and keep polling
+			// to avoid flakiness when the API server briefly restarts.
+			if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "EOF") {
+				k.logger().Warnf("Transient error getting Deployment: %v", err)
+				return false, nil
+			}
 			return false, err
 		}
 		if deployment.Status.ReadyReplicas == *deployment.Spec.Replicas {
