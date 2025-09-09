@@ -1,0 +1,3 @@
+[submodule "submodules/karpenter"]
+	path = submodules/karpenter
+	url = https://github.com/kubernetes-sigs/karpenter
