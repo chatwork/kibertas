@@ -44,6 +44,11 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
 	k := testkit.NewKubernetes(kc.KubeconfigPath)
 
+	os.Setenv("RESOURCE_NAME", appName)
+	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
+	os.Setenv("NODE_LABEL_KEY", nodeLabelKey)
+	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
+
 	const controlPlaneNodes = 1
 	testkit.PollUntil(t, func() bool {
 		return len(k.ListReadyNodeNames(t)) == controlPlaneNodes
@@ -57,11 +62,6 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 
 	helmInstallKwok(t, helm)
 	helmInstallKarpenter(t, clusterName, helm, kctl)
-
-	os.Setenv("RESOURCE_NAME", appName)
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-	os.Setenv("NODE_LABEL_KEY", nodeLabelKey)
-	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
 
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
