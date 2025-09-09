@@ -61,7 +61,34 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get kind clusters: %v\n%s", err, string(out))
 	}
+	t.Logf("kind get clusters")
 	t.Logf(string(out))
+
+	command = exec.CommandContext(context.Background(), "docker", "context", "ls")
+	out, err = command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to get docker contexts: %v\n%s", err, string(out))
+	}
+	t.Logf("docker context ls")
+	t.Logf(string(out))
+
+	// docker context show
+
+	command = exec.CommandContext(context.Background(), "docker", "context", "show")
+	out, err = command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to get current docker context: %v\n%s", err, string(out))
+	}
+	t.Logf("docker context show")
+	t.Logf(string(out))
+
+	// echo $KIND_EXPERIMENTAL_PROVIDER
+	command = exec.CommandContext(context.Background(), "bash", "-c", "echo $KIND_EXPERIMENTAL_PROVIDER")
+	out, err = command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to get KIND_EXPERIMENTAL_PROVIDER: %v\n%s", err, string(out))
+	}
+	t.Logf("KIND_EXPERIMENTAL_PROVIDER=%s", strings.TrimSpace(string(out)))
 
 	clusterName := kctl.Capture(t, "config", "current-context")
 	clusterName = strings.TrimPrefix(strings.TrimSpace(clusterName), "kind-")
