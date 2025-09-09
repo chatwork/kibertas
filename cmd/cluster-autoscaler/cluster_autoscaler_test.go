@@ -37,14 +37,13 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 
 	kc := h.KubernetesCluster(t)
 
-	kctl := testkit.NewKubectl(kc.KubeconfigPath)
-
-	k := testkit.NewKubernetes(kc.KubeconfigPath)
-
 	os.Setenv("RESOURCE_NAME", appName)
 	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
 	os.Setenv("NODE_LABEL_KEY", nodeLabelKey)
 	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
+
+	kctl := testkit.NewKubectl(kc.KubeconfigPath)
+	k := testkit.NewKubernetes(kc.KubeconfigPath)
 
 	const controlPlaneNodes = 1 // Kind cluster has 1 control-plane node
 	testkit.PollUntil(t, func() bool {
