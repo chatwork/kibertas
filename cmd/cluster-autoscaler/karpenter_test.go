@@ -55,9 +55,8 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 
-	helmInstallKarpenter(t, clusterName, helm, kctl)
-
 	helmInstallKwok(t, helm)
+	helmInstallKarpenter(t, clusterName, helm, kctl)
 
 	os.Setenv("RESOURCE_NAME", appName)
 	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
@@ -91,7 +90,7 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	}))
 
 	// Scale to zero (or the original number of nodes)
-	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 10*time.Minute, false, func(ctx context.Context) (bool, error) {
+	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
 		nodes := k.ListReadyNodeNames(t)
 		return len(nodes) == controlPlaneNodes, nil
 	}))
