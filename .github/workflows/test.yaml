@@ -43,8 +43,8 @@ jobs:
           check-latest: true
       - name: Install ko
         run: |
-          set -euxo pipefail
-          go install github.com/ko-build/ko@latest
+          go install github.com/google/ko@latest
+          ko version
       - name: Install cloud-provider-kind
         run: make cloud-provider-kind
       - name: Run E2E tests on kind
