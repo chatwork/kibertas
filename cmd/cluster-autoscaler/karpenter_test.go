@@ -2,6 +2,7 @@ package clusterautoscaler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	apiv1 "k8s.io/api/core/v1"
 	"os"
@@ -21,6 +22,8 @@ import (
 )
 
 func TestKarpenterScaleUpFromNonZero(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
@@ -47,18 +50,15 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
 
 	kctl := testkit.NewKubectl(kc.KubeconfigPath)
-	k := testkit.NewKubernetes(kc.KubeconfigPath)
 
 	const controlPlaneNodes = 1
 	testkit.PollUntil(t, func() bool {
-		return len(k.ListReadyNodeNames(t)) == controlPlaneNodes
+		return readyNodeCount(t, kctl) == controlPlaneNodes
 	}, 5*time.Minute)
 	t.Logf("Kind cluster is ready with %d control-plane nodes", controlPlaneNodes)
 
 	clusterName := kctl.Capture(t, "config", "current-context")
 	clusterName = strings.TrimPrefix(strings.TrimSpace(clusterName), "kind-")
-	// ko が利用する Kind のクラスタ名が妥当か検証し、必要なら自動補正
-	clusterName = resolveKindClusterName(t, clusterName)
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 
@@ -87,14 +87,12 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	// Scale up by 1 data-plane node
 	require.NoError(t, clusterautoscaler.Check())
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
-		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == controlPlaneNodes+1, nil
+		return readyNodeCount(t, kctl) == controlPlaneNodes+1, nil
 	}))
 
 	// Scale to zero (or the original number of nodes)
 	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 5*time.Minute, false, func(ctx context.Context) (bool, error) {
-		nodes := k.ListReadyNodeNames(t)
-		return len(nodes) == controlPlaneNodes, nil
+		return readyNodeCount(t, kctl) == controlPlaneNodes, nil
 	}))
 }
 
@@ -166,40 +164,32 @@ func helmInstallKarpenter(t *testing.T, clusterName string, helm *testkit.Helm, 
 	t.Logf("Karpenter NodePool and NodeClass applied successfully")
 }
 
-// resolveKindClusterName は、与えられたクラスタ名で kind ノードが見つからない場合に
-// `kind get clusters` の結果から自動補正する。見つからない場合は詳細ログを出して fail。
-func resolveKindClusterName(t *testing.T, name string) string {
-	// まず与えられた名前で確認
-	if hasKindNodes(t, name) {
-		return name
+func readyNodeCount(t *testing.T, kctl *testkit.Kubectl) int {
+	out := kctl.Capture(t, "get", "nodes", "-o", "json")
+	type condition struct {
+		Type   string `json:"type"`
+		Status string `json:"status"`
 	}
-	// 一覧から補正
-	out, err := exec.Command("kind", "get", "clusters").CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to list kind clusters: %v\n%s", err, string(out))
+	type nodeStatus struct {
+		Conditions []condition `json:"conditions"`
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	t.Logf("kind clusters detected: %v", lines)
-	if len(lines) == 1 && lines[0] != "" {
-		candidate := strings.TrimSpace(lines[0])
-		if hasKindNodes(t, candidate) {
-			t.Logf("Auto-selected KIND_CLUSTER_NAME=%s (was %s)", candidate, name)
-			return candidate
+	type node struct {
+		Status nodeStatus `json:"status"`
+	}
+	var payload struct {
+		Items []node `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("failed to parse kubectl get nodes output: %v\n%s", err, out)
+	}
+	ready := 0
+	for _, n := range payload.Items {
+		for _, c := range n.Status.Conditions {
+			if c.Type == "Ready" && c.Status == "True" {
+				ready++
+				break
+			}
 		}
 	}
-	t.Fatalf("kind nodes not found for cluster %q; candidates=%v", name, lines)
-	return name
-}
-
-func hasKindNodes(t *testing.T, name string) bool {
-	if _, err := exec.LookPath("kind"); err != nil {
-		t.Fatalf("kind CLI not found in PATH: %v", err)
-	}
-	out, err := exec.Command("kind", "get", "nodes", "--name", name).CombinedOutput()
-	if err != nil {
-		t.Logf("kind get nodes failed for %s: %v\n%s", name, err, string(out))
-		return false
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	return len(lines) > 0 && strings.TrimSpace(lines[0]) != ""
+	return ready
 }
