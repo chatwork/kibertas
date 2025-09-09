@@ -2,8 +2,12 @@ package clusterautoscaler
 
 import (
 	"context"
+	"fmt"
 	apiv1 "k8s.io/api/core/v1"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,6 +50,28 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 	}, 5*time.Minute)
 	t.Logf("Kind cluster is ready with %d control-plane nodes", controlPlaneNodes)
 
+	clusterName := kctl.Capture(t, "config", "current-context")
+	clusterName = strings.TrimPrefix(clusterName, "kind-")
+
+	if _, err := exec.LookPath("ko"); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "ko", "build", "-B", "sigs.k8s.io/karpenter/kwok")
+		cmd.Dir = filepath.Join("..", "..", "submodules", "karpenter")
+		cmd.Env = append(os.Environ(),
+			"KO_DOCKER_REPO=kind.local",
+			fmt.Sprintf("KIND_CLUSTER_NAME=%s", clusterName),
+		)
+		t.Logf("Running: (cd %s && %s)", cmd.Dir, "ko build -B sigs.k8s.io/karpenter/kwok")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("ko build failed: %v\n%s", err, string(out))
+		} else {
+			t.Logf("ko build succeeded:\n%s", string(out))
+		}
+	} else {
+		t.Fatalf("ko not found in PATH.")
+	}
+
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 
 	clusterautoscalerNs := "default"
@@ -53,9 +79,8 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 		hc.Values = map[string]interface{}{
 			"controller": map[string]interface{}{
 				"image": map[string]interface{}{
-					"repository": "cwyamashita/ko.local.kwok",
+					"repository": "kind.local/kwok",
 					"tag":        "latest",
-					"digest":     "sha256:043584964d9d84c2f2927080531a9e31e51ed07d6b790e350830814c2305cfd1",
 				},
 				"resources": map[string]interface{}{
 					"requests": map[string]interface{}{
