@@ -42,12 +42,17 @@ jobs:
           go-version: '1.22.5'
           check-latest: true
       - uses: ko-build/setup-ko@v0.8
+        with:
+          version: '0.18.0'
+        env:
+          KO_DOCKER_REPO: kind.local
       - name: Install cloud-provider-kind
         run: make cloud-provider-kind
       - name: Run E2E tests on kind
         run: make e2e/kindtest
         env:
           KIND_IMAGE: ${{ matrix.kind_image }}
+          KIND_EXPERIMENTAL_PROVIDER: "docker"
   golangci:
     name: lint
     runs-on: ubuntu-latest
