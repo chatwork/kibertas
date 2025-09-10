@@ -48,7 +48,7 @@ func TestIngressCheckE2E(t *testing.T) {
 		testkit.RetainResourcesOnFailure(),
 	)
 
-	kc := h.KubernetesCluster(t)
+	kc := h.KubernetesCluster(t, ktesting.WithRandomClusterID())
 	time.Sleep(240 * time.Second)
 
 	// Start cloud-provider-kind to manage service type=LoadBalancer
