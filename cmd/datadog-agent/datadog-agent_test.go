@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
+	"github.com/chatwork/kibertas/internal/ktesting"
 	"github.com/chatwork/kibertas/util/notify"
 	"github.com/mumoshu/testkit"
 	"github.com/sirupsen/logrus"
@@ -99,7 +100,7 @@ func TestDatadogAgentCheckE2E(t *testing.T) {
 		testkit.RetainResourcesOnFailure(),
 	)
 
-	kc := h.KubernetesCluster(t)
+	kc := h.KubernetesCluster(t, ktesting.WithRandomClusterID())
 
 	helm := testkit.NewHelm(kc.KubeconfigPath)
 	// See https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler#tldr

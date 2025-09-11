@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
+	"github.com/chatwork/kibertas/internal/ktesting"
 	"github.com/chatwork/kibertas/util/notify"
 	"github.com/stretchr/testify/require"
 
@@ -43,7 +44,7 @@ func TestFluentE2E(t *testing.T) {
 		testkit.RetainResourcesOnFailure(),
 	)
 
-	kc := h.KubernetesCluster(t)
+	kc := h.KubernetesCluster(t, ktesting.WithRandomClusterID())
 	ns := h.KubernetesNamespace(t, testkit.KubeconfigPath(kc.KubeconfigPath))
 	t.Cleanup(func() {
 		if t.Failed() {

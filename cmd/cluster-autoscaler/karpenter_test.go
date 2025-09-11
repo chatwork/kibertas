@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/chatwork/kibertas/cmd"
+	"github.com/chatwork/kibertas/internal/ktesting"
 	"github.com/chatwork/kibertas/util/notify"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -54,7 +55,7 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 		testkit.RetainResourcesOnFailure(),
 	)
 
-	kc := h.KubernetesCluster(t)
+	kc := h.KubernetesCluster(t, ktesting.WithRandomClusterID())
 
 	k := testkit.NewKubernetes(kc.KubeconfigPath)
 	testkit.PollUntil(t, func() bool {
