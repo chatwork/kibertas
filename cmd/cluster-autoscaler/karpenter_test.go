@@ -99,6 +99,9 @@ func TestKarpenterScaleUpFromNonZero(t *testing.T) {
 }
 
 func helmInstallKarpenter(t *testing.T, clusterName string, helm *testkit.Helm, kctl *testkit.Kubectl) {
+	// When KO_DOCKER_REPO=kind.local is set, `ko` builds the image and
+	// loads it directly into the kind cluster (no registry needed).
+	// See: https://ko.build/configuration/#local-publishing-options
 	const koDockerRepo = "kind.local"
 	if _, err := exec.LookPath("ko"); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
