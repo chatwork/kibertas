@@ -2,6 +2,7 @@ KIND_VERSION = 0.21.0
 KUBERNETES_VERSION = 1.29.1
 KIND_NODE_HASH = a0cc28af37cf39b019e2b448c54d1a3f789de32536cb5a5db61a49623e527144
 CERT_MANAGER_VERSION = 1.14.1
+KARPENTER_VERSION ?= v1.6.2
 INGRESS_NGINX_VERSION = $(shell grep "FROM registry.k8s.io/ingress-nginx/controller:" thirdparty/ingress-nginx/Dockerfile| cut -d':' -f2)
 
 GOLANGCI_LINT_VERSION=1.59.0
@@ -35,6 +36,18 @@ test:
 .PHONY: e2e/kindtest
 e2e/kindtest:
 	go test -timeout 20m -v ./cmd/...
+
+.PHONY: init-submodules
+init-submodules:
+	git submodule update --init --recursive --depth 1
+
+.PHONY: update-karpenter
+update-karpenter:
+	cd submodules/karpenter && \
+	git fetch --depth=1 origin tag $(KARPENTER_VERSION) && \
+	git checkout -B $(KARPENTER_VERSION) FETCH_HEAD && \
+	cd ../.. && \
+	git add submodules/karpenter
 
 
 # This will produce following images for testing locally:

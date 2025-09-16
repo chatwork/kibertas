@@ -1,54 +1,36 @@
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: default
 spec:
   template:
-    # metadata:
-    #   labels:
-    #     karpenter.sh/capacity-type: spot
+    metadata:
+      labels:
+        kwok-nodegroup: kwok-worker
     spec:
       requirements:
-        # - key: kubernetes.io/arch
-        #   operator: In
-        #   values: ["amd64"]
-        # - key: kubernetes.io/os
-        #   operator: In
-        #   values: ["linux"]
-        - key: karpenter.sh/capacity-type
+        - key: kubernetes.io/arch
           operator: In
-          values: ["spot"]
-        - key: karpenter.k8s.aws/instance-category
+          values: ["amd64"]
+        - key: kubernetes.io/os
           operator: In
-          values: ["c", "m", "r"]
-        - key: karpenter.k8s.aws/instance-size
-          operator: In
-          values: ["nano", "micro", "small", "medium"]
-        # - key: karpenter.k8s.aws/instance-family
-        #   operator: In
-        #   values: ["t4"]
+          values: ["linux"]
+      taints:
+        - key: kwok-provider
+          value: "true"
+          effect: NoSchedule
       nodeClassRef:
-        apiVersion: karpenter.k8s.aws/v1beta1
-        kind: EC2NodeClass
         name: default
+        group: karpenter.kwok.sh
+        kind: KWOKNodeClass
+      expireAfter: 720h # 30 * 24h = 720h
   limits:
     cpu: 1000
   disruption:
-    consolidationPolicy: WhenUnderutilized
-    expireAfter: 720h # 30 * 24h = 720h
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 10s
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
-kind: EC2NodeClass
+apiVersion: karpenter.kwok.sh/v1alpha1
+kind: KWOKNodeClass
 metadata:
   name: default
-spec:
-  amiFamily: AL2 # Amazon Linux 2
-  role: "{{ .RoleName }}" # replace with your cluster name
-  subnetSelectorTerms:
-    - tags:
-        karpenter.sh/discovery: "{{ .ClusterName }}" # replace with your cluster name
-  securityGroupSelectorTerms:
-    - tags:
-        karpenter.sh/discovery: "{{ .ClusterName }}" # replace with your cluster name
-  amiSelectorTerms:
-    - id: "{{ .AmdAmiId }}"
