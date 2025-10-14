@@ -4,5 +4,3 @@ manifests/credentials.yaml
 .vscode
 dist/
 .env*
-.terraform*
-terraform.tfstate*

@@ -2,10 +2,11 @@ package clusterautoscaler
 
 import (
 	"context"
-	apiv1 "k8s.io/api/core/v1"
 	"os"
 	"testing"
 	"time"
+
+	apiv1 "k8s.io/api/core/v1"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/internal/ktesting"
@@ -106,8 +107,6 @@ func helmInstallClusterAutoscaler(t *testing.T, helm *testkit.Helm, kctl *testki
 		hc.Values = map[string]interface{}{
 			"cloudProvider": "kwok",
 			"autoDiscovery": map[string]interface{}{
-				// This is so because we specify prefix=kibertas-ca in the testkit constructor above
-				// and the terraform main.tf uses prefix + "-cluster" as the cluster name.
 				"clusterName": "kibertas-ca-cluster",
 			},
 			"awsRegion": "ap-northeast-1",
