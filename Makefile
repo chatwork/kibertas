@@ -5,7 +5,7 @@ CERT_MANAGER_VERSION = 1.14.1
 KARPENTER_VERSION ?= v1.6.2
 INGRESS_NGINX_VERSION = $(shell grep "FROM registry.k8s.io/ingress-nginx/controller:" thirdparty/ingress-nginx/Dockerfile| cut -d':' -f2)
 
-GOLANGCI_LINT_VERSION=1.59.0
+GOLANGCI_LINT_VERSION=2.5.0
 TAG  ?= $(shell git describe --tags --abbrev=0 HEAD || echo dev)
 DATE_FMT = +"%Y-%m-%dT%H:%M:%S%z"
 ifdef SOURCE_DATE_EPOCH

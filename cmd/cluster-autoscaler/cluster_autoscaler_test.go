@@ -2,10 +2,11 @@ package clusterautoscaler
 
 import (
 	"context"
-	apiv1 "k8s.io/api/core/v1"
 	"os"
 	"testing"
 	"time"
+
+	apiv1 "k8s.io/api/core/v1"
 
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/internal/ktesting"
@@ -53,10 +54,10 @@ func TestClusterAutoscalerScaleUpFromNonZero(t *testing.T) {
 	helmInstallKwok(t, helm)
 	helmInstallClusterAutoscaler(t, helm, kctl)
 
-	os.Setenv("RESOURCE_NAME", appName)
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-	os.Setenv("NODE_LABEL_KEY", nodeLabelKey)
-	os.Setenv("NODE_LABEL_VALUE", nodeLabelValue)
+	mustSetenv(t, "RESOURCE_NAME", appName)
+	mustSetenv(t, "KUBECONFIG", kc.KubeconfigPath)
+	mustSetenv(t, "NODE_LABEL_KEY", nodeLabelKey)
+	mustSetenv(t, "NODE_LABEL_VALUE", nodeLabelValue)
 
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
@@ -140,4 +141,10 @@ func helmInstallClusterAutoscaler(t *testing.T, helm *testkit.Helm, kctl *testki
 		"rollout", "restart", "deployment", "cluster-autoscaler-kwok-cluster-autoscaler",
 		"-n", clusterautoscalerNs,
 	)
+}
+
+func mustSetenv(t *testing.T, key, value string) {
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("os.Setenv %s=%s: %s", key, value, err)
+	}
 }
