@@ -150,11 +150,11 @@ func TestFluentE2E(t *testing.T) {
 		kctl.Capture(t, "create", "clusterrolebinding", fluentdClusterRoleBindingName, "--clusterrole=cluster-admin", "--serviceaccount="+fluentdNs+":fluentd")
 	}
 
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-	os.Setenv("LOG_BUCKET_NAME", s3Bucket)
-	os.Setenv("USE_PATH_STYLE", "true")
-	os.Setenv("RESOURCE_NAMESPACE", ns.Name)
-	os.Setenv("LOG_PATH", logsPath)
+	mustSetenv(t, "KUBECONFIG", kc.KubeconfigPath)
+	mustSetenv(t, "LOG_BUCKET_NAME", s3Bucket)
+	mustSetenv(t, "USE_PATH_STYLE", "true")
+	mustSetenv(t, "RESOURCE_NAMESPACE", ns.Name)
+	mustSetenv(t, "LOG_PATH", logsPath)
 
 	logger := func() *logrus.Entry {
 		return logrus.NewEntry(logrus.New())
@@ -166,10 +166,10 @@ func TestFluentE2E(t *testing.T) {
 	// Set AWS environment variables for LocalStack
 	// kibertas internally uses AWS SDK, so these environment variables
 	// configure the SDK to connect to LocalStack instead of real AWS
-	os.Setenv("AWS_ENDPOINT_URL", localhostS3Endpoint)
-	os.Setenv("AWS_ACCESS_KEY_ID", "test")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "test")
-	os.Setenv("AWS_DEFAULT_REGION", s3Region)
+	mustSetenv(t, "AWS_ENDPOINT_URL", localhostS3Endpoint)
+	mustSetenv(t, "AWS_ACCESS_KEY_ID", "test")
+	mustSetenv(t, "AWS_SECRET_ACCESS_KEY", "test")
+	mustSetenv(t, "AWS_DEFAULT_REGION", s3Region)
 
 	checker := cmd.NewChecker(context.Background(), false, logger, chatwork, "test", 3*time.Minute)
 	fluent, err := NewFluent(checker)
@@ -232,7 +232,11 @@ func deployLocalStack(t *testing.T, kubeconfigPath string, kctl *testkit.Kubectl
 			t.Logf("Port-forward health check failed: %v", err)
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				t.Logf("Failed to close response body: %v", err)
+			}
+		}()
 		body := make([]byte, 1024)
 		n, _ := resp.Body.Read(body)
 		output := string(body[:n])
@@ -247,6 +251,14 @@ func prepareFluentdLogDestinationBucket(t *testing.T, s3Endpoint string, s3Bucke
 	client := &http.Client{}
 	bucketResp, err := client.Do(req)
 	if err == nil {
-		bucketResp.Body.Close()
+		if err := bucketResp.Body.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func mustSetenv(t *testing.T, key, value string) {
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("os.Setenv %s=%s: %s", key, value, err)
 	}
 }

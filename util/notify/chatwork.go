@@ -67,7 +67,11 @@ func (c *Chatwork) Send() {
 	if err != nil {
 		c.Logger().Error(err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.Logger().Error(err)
+		}
+	}()
 
 	// ステータスコードを表示
 	c.Logger().Infoln("Chatwork Send Message Status:", resp.Status)

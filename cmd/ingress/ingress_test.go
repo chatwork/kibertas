@@ -91,10 +91,10 @@ func TestIngressCheckE2E(t *testing.T) {
 	// conflicts among test namespaces across test runs
 	namespace := fmt.Sprintf("ingress-test-%d%02d%02d", now.Year(), now.Month(), now.Day())
 
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
-	os.Setenv("RESOURCE_NAME", "sample")
-	os.Setenv("EXTERNAL_HOSTNAME", "sample.example.com")
-	os.Setenv("INGRESS_CLASS_NAME", "nginx")
+	mustSetenv(t, "KUBECONFIG", kc.KubeconfigPath)
+	mustSetenv(t, "RESOURCE_NAME", "sample")
+	mustSetenv(t, "EXTERNAL_HOSTNAME", "sample.example.com")
+	mustSetenv(t, "INGRESS_CLASS_NAME", "nginx")
 	ingress, err := NewIngress(
 		cmd.NewChecker(context.Background(), true, logger, chatwork, "test", 1*time.Minute),
 		true,
@@ -179,5 +179,11 @@ func TestIngressCheckDNSRecord(t *testing.T) {
 	err = ingress.checkDNSRecord()
 	if err != nil {
 		t.Fatalf("Expected No Error, but got error: %s", err)
+	}
+}
+
+func mustSetenv(t *testing.T, key, value string) {
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("os.Setenv %s=%s: %s", key, value, err)
 	}
 }

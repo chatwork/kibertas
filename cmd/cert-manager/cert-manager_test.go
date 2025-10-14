@@ -47,7 +47,10 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	os.Setenv("KUBECONFIG", kc.KubeconfigPath)
+	if err := os.Setenv("KUBECONFIG", kc.KubeconfigPath); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to set KUBECONFIG: %s", err)
+		os.Exit(1)
+	}
 
 	code := m.Run()
 

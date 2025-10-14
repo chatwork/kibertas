@@ -129,21 +129,21 @@ func (c *CertManager) cleanUpResources(cert certificates) error {
 	var result *multierror.Error
 	var err error
 
-	c.Logger().Infof("Delete Certificate: %s", cert.certificate.ObjectMeta.Name)
+	c.Logger().Infof("Delete Certificate: %s", cert.certificate.Name)
 	if err := c.Client.Delete(context.Background(), cert.certificate); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Certificate: %s\n", err))
 		c.Logger().Errorf("Error Delete Certificate: %s", err)
 		result = multierror.Append(result, err)
 	}
 
-	c.Logger().Infof("Delete Issuer: %s", cert.certificate.ObjectMeta.Name)
+	c.Logger().Infof("Delete Issuer: %s", cert.certificate.Name)
 	if err := c.Client.Delete(context.Background(), cert.issuer); err != nil {
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete Issuer: %s\n", err))
 		c.Logger().Errorf("Error Delete Issuer: %s", err)
 		result = multierror.Append(result, err)
 	}
 
-	c.Logger().Infof("Delete RootCA: %s", cert.certificate.ObjectMeta.Name)
+	c.Logger().Infof("Delete RootCA: %s", cert.certificate.Name)
 	if err := c.Client.Delete(context.Background(), cert.rootCA); err != nil {
 		c.Logger().Errorf("Error Delete RootCA: %s", err)
 		c.Chatwork.AddMessage(fmt.Sprintf("Error Delete RootCA: %s\n", err))
@@ -244,8 +244,8 @@ func (c *CertManager) createCertificateObject() certificates {
 // CRなので、client-goではなく、client-runtimeを使う
 // ここでしか作らないリソースなので、utilのほうには入れない
 func (c *CertManager) createCert(cert certificates) error {
-	c.Logger().Infof("Create RootCA: %s", cert.rootCA.ObjectMeta.Name)
-	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", cert.rootCA.ObjectMeta.Name))
+	c.Logger().Infof("Create RootCA: %s", cert.rootCA.Name)
+	c.Chatwork.AddMessage(fmt.Sprintf("Create RootCA: %s\n", cert.rootCA.Name))
 	err := c.Client.Create(c.Ctx, cert.rootCA)
 	if err != nil {
 		return err
@@ -268,15 +268,15 @@ func (c *CertManager) createCert(cert certificates) error {
 	}
 
 	//Create Issuer
-	c.Logger().Infof("Create Issuer: %s", cert.issuer.ObjectMeta.Name)
-	c.Chatwork.AddMessage(fmt.Sprintf("Create Issuer: %s\n", cert.issuer.ObjectMeta.Name))
+	c.Logger().Infof("Create Issuer: %s", cert.issuer.Name)
+	c.Chatwork.AddMessage(fmt.Sprintf("Create Issuer: %s\n", cert.issuer.Name))
 	err = c.Client.Create(c.Ctx, cert.issuer)
 	if err != nil {
 		return err
 	}
 
-	c.Logger().Infof("Create Certificate: %s", cert.certificate.ObjectMeta.Name)
-	c.Chatwork.AddMessage(fmt.Sprintf("Create Certificate: %s\n", cert.certificate.ObjectMeta.Name))
+	c.Logger().Infof("Create Certificate: %s", cert.certificate.Name)
+	c.Chatwork.AddMessage(fmt.Sprintf("Create Certificate: %s\n", cert.certificate.Name))
 	err = c.Client.Create(c.Ctx, cert.certificate)
 
 	if err != nil {

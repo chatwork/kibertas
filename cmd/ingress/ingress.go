@@ -239,7 +239,7 @@ func (i *Ingress) createServiceObject() *apiv1.Service {
 }
 
 func (i *Ingress) createIngressObject() *networkingv1.Ingress {
-	var pathPrefix networkingv1.PathType = networkingv1.PathTypeImplementationSpecific
+	var pathPrefix = networkingv1.PathTypeImplementationSpecific
 	serviceName := i.ResourceName
 
 	ingress := &networkingv1.Ingress{

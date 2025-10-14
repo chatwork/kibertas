@@ -50,7 +50,9 @@ func TestSend(t *testing.T) {
 			t.Errorf("Expected request body 'body=test', got '%s'", string(body))
 		}
 
-		fmt.Fprintln(w, "OK")
+		if _, err := fmt.Fprintln(w, "OK"); err != nil {
+			t.Fatal(err)
+		}
 	}))
 
 	defer ts.Close()
