@@ -5,31 +5,45 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV1"
 	"github.com/chatwork/kibertas/cmd"
 	"github.com/chatwork/kibertas/util"
-
-	"github.com/DataDog/datadog-api-client-go/v2/api/datadog"
-	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV1"
 )
 
 type DatadogAgent struct {
 	*cmd.Checker
-	ApiKey       string
-	AppKey       string
-	QueryMetrics string
-	WaitTime     time.Duration
+	// MetricsQuery is the Datadog metrics query to execute on check
+	MetricsQuery string
+	// WaitTime is the initial wait time before querying metrics
+	WaitTime time.Duration
+	// DatadogMetrics is the Datadog metrics API provider that provides metrics querying
+	DatadogMetrics DatadogMetrics
+}
+
+// DatadogMetrics interface abstracts the Datadog metrics API for testing
+type DatadogMetrics interface {
+	// QueryMetrics executes a metrics query against the Datadog API
+	QueryMetrics(ctx context.Context, from, to int64, query string) (datadogV1.MetricsQueryResponse, *http.Response, error)
 }
 
 func NewDatadogAgent(checker *cmd.Checker) (*DatadogAgent, error) {
+	client, err := newDatadogClientFromEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewDatadogAgentWithClient(checker, client)
+}
+
+func newDatadogClientFromEnv() (*DatadogClient, error) {
 	apiKey := ""
 	appKey := ""
-	queryMetrics := ""
-
 	if v := os.Getenv("DD_API_KEY"); v != "" {
 		apiKey = v
 	}
@@ -37,7 +51,15 @@ func NewDatadogAgent(checker *cmd.Checker) (*DatadogAgent, error) {
 		appKey = v
 	}
 
-	queryMetrics = "avg:kubernetes.cpu.user.total{*}"
+	if apiKey == "" || appKey == "" {
+		return nil, errors.New("DD_API_KEY or DD_APP_KEY is empty")
+	}
+
+	return NewDatadogClient(apiKey, appKey), nil
+}
+
+func NewDatadogAgentWithClient(checker *cmd.Checker, metrics DatadogMetrics) (*DatadogAgent, error) {
+	queryMetrics := "avg:kubernetes.cpu.user.total{*}"
 	if v := os.Getenv("QUERY_METRICS"); v != "" {
 		queryMetrics = v
 	}
@@ -46,22 +68,16 @@ func NewDatadogAgent(checker *cmd.Checker) (*DatadogAgent, error) {
 	checker.Chatwork.AddMessage(fmt.Sprintf("Start in %s at %s\n", checker.ClusterName, time.Now().In(location).Format("2006-01-02 15:04:05")))
 
 	return &DatadogAgent{
-		Checker:      checker,
-		ApiKey:       apiKey,
-		AppKey:       appKey,
-		QueryMetrics: queryMetrics,
-		WaitTime:     3 * 60 * time.Second,
+		Checker:        checker,
+		MetricsQuery:   queryMetrics,
+		WaitTime:       3 * 60 * time.Second,
+		DatadogMetrics: metrics,
 	}, nil
 }
 
 func (d *DatadogAgent) Check() error {
 	defer d.Chatwork.Send()
 
-	if d.ApiKey == "" || d.AppKey == "" {
-		d.Logger().Error("DD_API_KEY or DD_APP_KEY is empty")
-		d.Chatwork.AddMessage("DD_API_KEY or DD_APP_KEY is empty\n")
-		return errors.New("DD_API_KEY or DD_APP_KEY is empty")
-	}
 	d.Chatwork.AddMessage("datadog-agent check start\n")
 
 	if err := d.checkMetrics(); err != nil {
@@ -73,52 +89,9 @@ func (d *DatadogAgent) Check() error {
 }
 
 func (d *DatadogAgent) checkMetrics() error {
-	// NewDefaultContext loads DD_API_KEY and DD_APP_KEY
-	// into apiKeyAuth and appKeyAuth respectively,
-	// and doing:
-	//
-	// datadog.NewDefaultContext(context.WithValue(
-	// 	ctx,
-	// 	datadog.ContextAPIKeys,
-	// 	keys,
-	// ))
-	//
-	// does not clear the apiKeyAuth and appKeyAuth values
-	// set by the NewDefaultContext function.
-	//
-	// So the choice is to use NewDefaultContext for loading
-	// environment variables or use context.WithValue for
-	// setting the API keys from DatadogAgent struct,
-	// but not both.
-	//
-	// As we already check for empty API keys before calling checkMetrics,
-	// let's use NewDefaultContext to load the environment variables.
-	ddctx := datadog.NewDefaultContext(d.Ctx)
 
-	// In case we had non-empty d.ApiKey and d.AppKey set along with
-	// the environment variables, the user intent is to use the
-	// API keys from the DatadogAgent struct.
-	keys := map[string]datadog.APIKey{}
-	if d.ApiKey != "" {
-		keys["apiKeyAuth"] = datadog.APIKey{Key: d.ApiKey}
-	}
-	if d.AppKey != "" {
-		keys["appKeyAuth"] = datadog.APIKey{Key: d.AppKey}
-	}
-	if len(keys) > 0 {
-		ddctx = context.WithValue(
-			ddctx,
-			datadog.ContextAPIKeys,
-			keys,
-		)
-	}
-
-	configuration := datadog.NewConfiguration()
-	apiClient := datadog.NewAPIClient(configuration)
-	api := datadogV1.NewMetricsApi(apiClient)
-
-	d.Logger().Infof("Querying metrics with query: %s", d.QueryMetrics)
-	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s\n", d.QueryMetrics))
+	d.Logger().Infof("Querying metrics with query: %s", d.MetricsQuery)
+	d.Chatwork.AddMessage(fmt.Sprintf("Querying metrics with query: %s\n", d.MetricsQuery))
 
 	d.Logger().Info("Waiting metrics...")
 
@@ -129,7 +102,7 @@ func (d *DatadogAgent) checkMetrics() error {
 	now := time.Now().Unix()
 	from := now - 60*2
 	err := wait.PollUntilContextTimeout(d.Ctx, 30*time.Second, d.Timeout, true, func(ctx context.Context) (bool, error) {
-		resp, r, err := api.QueryMetrics(ddctx, from, now, d.QueryMetrics)
+		resp, r, err := d.DatadogMetrics.QueryMetrics(ctx, from, now, d.MetricsQuery)
 
 		if err != nil {
 			if r != nil && r.StatusCode == 403 {
