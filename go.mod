@@ -1,6 +1,13 @@
 module github.com/chatwork/kibertas
 
+// The minimum Go version required to build this project
 go 1.25.0
+
+// A hint for setup-go action on CI to pick the Go version used to build
+// not only this project but also the karpenter's ko tool used in tests via setup-ko action.
+// Ensure this is greater than or equal to the 'go' version in
+// https://github.com/kubernetes-sigs/karpenter/blob/main/go.mod#L3
+toolchain go1.25.3
 
 require (
 	github.com/DataDog/datadog-api-client-go/v2 v2.50.0
