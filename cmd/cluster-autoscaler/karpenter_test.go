@@ -164,7 +164,7 @@ func helmInstallKarpenter(t *testing.T, clusterName string, helm *testkit.Helm, 
 	testkit.PollUntil(t, func() bool {
 		output := kctl.Capture(t, "get", "deployment", "karpenter", "-n", clusterautoscalerNs, "-o", "jsonpath={.status.readyReplicas}")
 		return output == "1"
-	}, 1*time.Minute)
+	}, 2*time.Minute)
 
 	t.Logf("Karpenter NodePool and NodeClass applied successfully")
 }
