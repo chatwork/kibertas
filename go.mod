@@ -7,7 +7,7 @@ go 1.25.0
 // not only this project but also the karpenter's ko tool used in tests via setup-ko action.
 // Ensure this is greater than or equal to the 'go' version in
 // https://github.com/kubernetes-sigs/karpenter/blob/main/go.mod#L3
-toolchain go1.25.3
+toolchain go1.25.5
 
 require (
 	github.com/DataDog/datadog-api-client-go/v2 v2.50.0
