@@ -21,6 +21,10 @@ updates:
   directory: "/"
   schedule:
     interval: "weekly"
+  groups:
+    github-actions-all:
+      patterns:
+        - "*"
 - package-ecosystem: "helm"
   directory: "/thirdparty"
   schedule:
