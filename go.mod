@@ -13,8 +13,8 @@ require (
 	github.com/DataDog/datadog-api-client-go/v2 v2.54.0
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.95.1
-	github.com/cert-manager/cert-manager v1.19.2
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
+	github.com/cert-manager/cert-manager v1.19.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/miekg/dns v1.1.72
 	github.com/mumoshu/testkit v0.13.0
