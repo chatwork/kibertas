@@ -4,10 +4,10 @@ module github.com/chatwork/kibertas
 go 1.26.0
 
 require (
-	github.com/DataDog/datadog-api-client-go/v2 v2.60.0
+	github.com/DataDog/datadog-api-client-go/v2 v2.61.0
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.0
 	github.com/cert-manager/cert-manager v1.20.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/miekg/dns v1.1.72
