@@ -7,7 +7,7 @@ require (
 	github.com/DataDog/datadog-api-client-go/v2 v2.66.0
 	github.com/aws/aws-sdk-go-v2 v1.47.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.0
 	github.com/cert-manager/cert-manager v1.21.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/miekg/dns v1.1.73
@@ -19,7 +19,7 @@ require (
 	k8s.io/api v0.37.1
 	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v0.37.1
-	sigs.k8s.io/controller-runtime v0.25.1
+	sigs.k8s.io/controller-runtime v0.25.2
 )
 
 require (
